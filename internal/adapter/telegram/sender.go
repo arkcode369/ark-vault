@@ -217,6 +217,21 @@ func (s *Sender) SendDocument(ctx context.Context, chatID int64, filename string
 		return err
 	}
 	defer resp.Body.Close()
+
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("read sendDocument response: %w", err)
+	}
+	var result struct {
+		OK          bool   `json:"ok"`
+		Description string `json:"description"`
+	}
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return fmt.Errorf("unmarshal sendDocument response: %w", err)
+	}
+	if !result.OK {
+		return fmt.Errorf("telegram sendDocument error: %s", result.Description)
+	}
 	return nil
 }
 

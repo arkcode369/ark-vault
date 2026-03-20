@@ -31,7 +31,7 @@ func NewAnalyticsService(cache ports.AnalyticsCacheStore, ai ports.AIAnalyzer, t
 func (s *AnalyticsService) GetAnalytics(ctx context.Context, telegramID int64) (*domain.TradeAnalytics, error) {
 	// Check cache first
 	cached, err := s.cache.GetAnalyticsCache(ctx, telegramID)
-	if err == nil && cached != nil {
+	if err == nil && cached != nil && time.Now().Before(cached.ExpiresAt) {
 		return cached, nil
 	}
 

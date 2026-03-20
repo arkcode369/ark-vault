@@ -2,6 +2,7 @@ package badger
 
 import (
 	"encoding/json"
+	"sync"
 	"time"
 
 	"github.com/dgraph-io/badger/v4"
@@ -9,8 +10,9 @@ import (
 
 // Store wraps a BadgerDB instance with helpers for JSON serialisation.
 type Store struct {
-	db     *badger.DB
-	stopGC chan struct{}
+	db        *badger.DB
+	stopGC    chan struct{}
+	closeOnce sync.Once
 }
 
 // OpenStore opens (or creates) a BadgerDB at path with production-tuned options
@@ -51,7 +53,9 @@ func (s *Store) runGC() {
 
 // Close stops the background GC and closes the database.
 func (s *Store) Close() error {
-	close(s.stopGC)
+	s.closeOnce.Do(func() {
+		close(s.stopGC)
+	})
 	return s.db.Close()
 }
 
@@ -126,6 +130,10 @@ func (s *Store) Scan(prefix string) ([][]byte, error) {
 // Delete removes the entry for key. It is a no-op if the key does not exist.
 func (s *Store) Delete(key string) error {
 	return s.db.Update(func(txn *badger.Txn) error {
-		return txn.Delete([]byte(key))
+		err := txn.Delete([]byte(key))
+		if err == badger.ErrKeyNotFound {
+			return nil
+		}
+		return err
 	})
 }

@@ -27,6 +27,7 @@ const (
 
 // GuidedSession holds the in-progress state for one user's guided flow.
 type GuidedSession struct {
+	mu          sync.Mutex
 	Step        GuidedStep
 	Trade       domain.Trade
 	ChatID      int64
@@ -43,16 +44,23 @@ type GuidedFlow struct {
 	mu       sync.RWMutex
 	sessions map[int64]*GuidedSession // keyed by Telegram user ID
 	ttl      time.Duration
+	done     chan struct{}
 }
 
 // NewGuidedFlow creates a new GuidedFlow.
 func NewGuidedFlow() *GuidedFlow {
 	gf := &GuidedFlow{
 		sessions: make(map[int64]*GuidedSession),
-		ttl:      5 * time.Minute,
+		ttl:      15 * time.Minute,
+		done:     make(chan struct{}),
 	}
 	go gf.cleanupLoop()
 	return gf
+}
+
+// Stop terminates the cleanup goroutine.
+func (gf *GuidedFlow) Stop() {
+	close(gf.done)
 }
 
 // Start creates a new session for the user.
@@ -188,14 +196,19 @@ func buildConfirmText(s *GuidedSession) string {
 func (gf *GuidedFlow) cleanupLoop() {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
-	for range ticker.C {
-		gf.mu.Lock()
-		now := time.Now()
-		for uid, s := range gf.sessions {
-			if now.After(s.ExpiresAt) {
-				delete(gf.sessions, uid)
+	for {
+		select {
+		case <-gf.done:
+			return
+		case <-ticker.C:
+			gf.mu.Lock()
+			now := time.Now()
+			for uid, s := range gf.sessions {
+				if now.After(s.ExpiresAt) {
+					delete(gf.sessions, uid)
+				}
 			}
+			gf.mu.Unlock()
 		}
-		gf.mu.Unlock()
 	}
 }

@@ -21,6 +21,16 @@ import (
 	"github.com/arkcode369/ark-vault/internal/service"
 )
 
+var wib *time.Location
+
+func init() {
+	var err error
+	wib, err = time.LoadLocation("Asia/Jakarta")
+	if err != nil {
+		wib = time.FixedZone("WIB", 7*3600)
+	}
+}
+
 func main() {
 	// Logger
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
@@ -134,7 +144,7 @@ func main() {
 			Name:     "weekly-report",
 			Interval: 1 * time.Hour, // check hourly
 			Run: func(ctx context.Context) error {
-				now := time.Now().UTC()
+				now := time.Now().In(wib)
 				dayMatch := isDayOfWeek(now, cfg.ReportDay)
 				hourMatch := now.Hour() == cfg.ReportHour
 				if dayMatch && hourMatch {
@@ -152,18 +162,19 @@ func main() {
 		Name:     "challenge-finalize",
 		Interval: 1 * time.Hour,
 		Run: func(ctx context.Context) error {
-			now := time.Now().UTC()
+			now := time.Now().In(wib)
 			// Finalize on Sunday at report hour
 			if now.Weekday() == time.Sunday && now.Hour() == cfg.ReportHour {
-				// Get last week's challenge
-				lastWeek := now.AddDate(0, 0, -7)
-				yearWeek := domain.YearWeekString(lastWeek)
+				// On Sunday, finalize the current week's challenge.
+				// ISOWeek treats Mon-Sun as one week, so Sunday belongs
+				// to the same ISO week as the preceding Mon-Sat.
+				yearWeek := domain.YearWeekString(now)
 				results, err := challengeSvc.FinalizeChallenge(ctx, yearWeek)
 				if err != nil {
 					return err
 				}
 				if len(results) > 0 && cfg.ReportChatID != 0 {
-					challenge, _ := challengeSvc.GetOrCreateChallenge(ctx, lastWeek)
+					challenge, _ := challengeSvc.GetOrCreateChallenge(ctx, now)
 					if challenge != nil {
 						text := telegram.FormatChallengeResults(challenge, results)
 						sender.SendHTML(ctx, cfg.ReportChatID, text, cfg.ReportThreadID)
@@ -178,9 +189,9 @@ func main() {
 		Name:     "challenge-announce",
 		Interval: 1 * time.Hour,
 		Run: func(ctx context.Context) error {
-			now := time.Now().UTC()
-			// Announce on Monday at 8
-			if now.Weekday() == time.Monday && now.Hour() == 8 {
+			now := time.Now().In(wib)
+			// Announce on Monday at configured report hour (WIB)
+			if now.Weekday() == time.Monday && now.Hour() == cfg.ReportHour {
 				challenge, err := challengeSvc.GetOrCreateChallenge(ctx, now)
 				if err != nil {
 					return err
@@ -219,7 +230,10 @@ func main() {
 		Name:     "monthly-report-card",
 		Interval: 1 * time.Hour,
 		Run: func(ctx context.Context) error {
-			now := time.Now().UTC()
+			if reportCardSvc == nil {
+				return nil
+			}
+			now := time.Now().In(wib)
 			// Generate on 1st of month at report hour
 			if now.Day() == 1 && now.Hour() == cfg.ReportHour {
 				lastMonth := now.AddDate(0, -1, 0).Format("2006-01")
@@ -228,18 +242,16 @@ func main() {
 					return err
 				}
 				for _, m := range members {
-					if reportCardSvc != nil {
-						report, err := reportCardSvc.GenerateMonthlyReport(ctx, m.TelegramID, lastMonth)
-						if err != nil {
-							logger.Error("report card generation failed", "member", m.TelegramID, "error", err)
-							continue
-						}
-						if report.TotalTrades > 0 {
-							text := telegram.FormatMonthlyReportCard(report)
-							// Send to report chat if configured
-							if cfg.ReportChatID != 0 {
-								sender.SendHTML(ctx, cfg.ReportChatID, text, cfg.ReportThreadID)
-							}
+					report, err := reportCardSvc.GenerateMonthlyReport(ctx, m.TelegramID, lastMonth)
+					if err != nil {
+						logger.Error("report card generation failed", "member", m.TelegramID, "error", err)
+						continue
+					}
+					if report.TotalTrades > 0 {
+						text := telegram.FormatMonthlyReportCard(report)
+						// Send to report chat if configured
+						if cfg.ReportChatID != 0 {
+							sender.SendHTML(ctx, cfg.ReportChatID, text, cfg.ReportThreadID)
 						}
 					}
 				}

@@ -45,7 +45,7 @@ func (s *ReportCardService) GenerateMonthlyReport(ctx context.Context, telegramI
 	}
 
 	// Parse yearMonth to determine the month boundaries
-	t, err := time.Parse("2006-01", yearMonth)
+	t, err := time.ParseInLocation("2006-01", yearMonth, wib)
 	if err != nil {
 		return nil, fmt.Errorf("invalid year-month format: %w", err)
 	}

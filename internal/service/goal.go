@@ -145,6 +145,11 @@ func (s *GoalService) CheckGoalCompletion(ctx context.Context, telegramID int64)
 func (s *GoalService) calculateCurrentValue(ctx context.Context, telegramID int64, goalType domain.GoalType) (float64, error) {
 	switch goalType {
 	case domain.GoalStreakDays:
+		// NOTE: streak_days uses the global current streak, which may have
+		// started before the current month. This is intentional — a goal like
+		// "maintain a 7-day streak this month" is satisfied as long as the
+		// user's current consecutive-day streak reaches the target, regardless
+		// of when it began. Acceptable for a small community.
 		streak, err := s.gamSvc.GetStreak(ctx, telegramID)
 		if err != nil {
 			return 0, err

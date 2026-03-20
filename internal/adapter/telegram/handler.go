@@ -181,6 +181,10 @@ func (h *Handler) HandleUpdate(ctx context.Context, u Update) {
 
 // handleTextJournal processes a #journal text-format trade entry.
 func (h *Handler) handleTextJournal(ctx context.Context, msg *Message, text string) {
+	if msg.From == nil {
+		return
+	}
+
 	result := ParseJournalMessage(text)
 	if result.Err != "" {
 		h.sender.SendHTML(ctx, msg.Chat.ID, "❌ "+result.Err, msg.MessageThreadID)
@@ -424,6 +428,9 @@ func (h *Handler) handleCallback(ctx context.Context, cb *CallbackQuery) {
 		return
 	}
 
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
 	data := cb.Data
 
 	switch {
@@ -501,6 +508,9 @@ func (h *Handler) handleCallback(ctx context.Context, cb *CallbackQuery) {
 
 // handleGuidedInput processes free-text input during a guided flow.
 func (h *Handler) handleGuidedInput(ctx context.Context, msg *Message, session *GuidedSession) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
 	text := strings.TrimSpace(msg.Text)
 
 	switch session.Step {
@@ -563,6 +573,9 @@ func (h *Handler) handleGuidedInput(ctx context.Context, msg *Message, session *
 
 // submitGuidedTrade finalises the guided flow and saves the trade.
 func (h *Handler) submitGuidedTrade(ctx context.Context, from *User, session *GuidedSession) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
 	if session.Submitting {
 		return // already processing
 	}

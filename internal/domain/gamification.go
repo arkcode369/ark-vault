@@ -27,13 +27,3 @@ type XPEvent struct {
 	Reason     string    `json:"reason"`
 	Timestamp  time.Time `json:"timestamp"`
 }
-
-// OnTradeResult is returned after gamification processes a trade event.
-type OnTradeResult struct {
-	XPGained int    `json:"xp_gained"`
-	TotalXP  int    `json:"total_xp"`
-	Level    int    `json:"level"`
-	Title    string `json:"title"`
-	LeveledUp bool  `json:"leveled_up"`
-	Streak   int    `json:"streak"`
-}

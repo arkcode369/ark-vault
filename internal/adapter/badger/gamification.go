@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"time"
 
 	badgerdb "github.com/dgraph-io/badger/v4"
@@ -23,7 +24,9 @@ func NewGamificationRepo(store *Store) *GamificationRepo {
 
 func profileKey(id int64) string   { return fmt.Sprintf("gam:profile:%d", id) }
 func streakKey(id int64) string    { return fmt.Sprintf("gam:streak:%d", id) }
-func xpLogKey(id int64, ts int64) string { return fmt.Sprintf("gam:xp_log:%d:%d", id, ts) }
+func xpLogKey(id int64, ts int64) string {
+	return fmt.Sprintf("gam:xp_log:%d:%d:%d", id, ts, rand.Int63n(1000000))
+}
 func xpLogPrefix(id int64) string  { return fmt.Sprintf("gam:xp_log:%d:", id) }
 
 // GetProfile returns the gamification profile for the given Telegram ID.

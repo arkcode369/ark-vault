@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"sort"
 	"time"
 
 	"github.com/arkcode369/ark-vault/internal/domain"
@@ -35,7 +36,12 @@ func (s *BadgeService) CheckAndAwardBadges(ctx context.Context, memberID int64, 
 
 	totalTrades := len(trades)
 
-	// 2. Calculate win streak from recent trades (trades are ordered date descending).
+	// 2. Sort trades by date descending for streak calculation.
+	sort.Slice(trades, func(i, j int) bool {
+		return trades[i].Date.After(trades[j].Date)
+	})
+
+	// Calculate win streak from recent trades.
 	winStreak := 0
 	for _, t := range trades {
 		if t.Status == domain.StatusWin {
