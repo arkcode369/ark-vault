@@ -30,7 +30,7 @@ type Config struct {
 
 	// Gemini AI
 	GeminiAPIKey string
-	GeminiModel  string // default "gemini-2.0-flash"
+	GeminiModel  string // default "gemini-3.1-flash-lite-preview"
 
 	// Rate limiting
 	RateLimitPerMin int // Max commands per user per minute. Default: 10
@@ -113,7 +113,7 @@ func Load() (*Config, error) {
 	c.GeminiAPIKey = strings.TrimSpace(os.Getenv("GEMINI_API_KEY"))
 	c.GeminiModel = strings.TrimSpace(os.Getenv("GEMINI_MODEL"))
 	if c.GeminiModel == "" {
-		c.GeminiModel = "gemini-2.0-flash"
+		c.GeminiModel = "gemini-3.1-flash-lite-preview"
 	}
 
 	if rlStr := os.Getenv("RATE_LIMIT_PER_MIN"); rlStr != "" {

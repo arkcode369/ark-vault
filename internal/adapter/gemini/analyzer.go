@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-const defaultModel = "gemini-2.0-flash"
+const defaultModel = "gemini-3.1-flash-lite-preview"
 const apiURL = "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s"
 
 // Analyzer implements ports.AIAnalyzer using Google Gemini.
