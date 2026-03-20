@@ -79,7 +79,7 @@ func (h *Handler) HandleUpdate(ctx context.Context, u Update) {
 	// Rate limiting (skip for #journal text which is passive)
 	if msg.From != nil && strings.HasPrefix(text, "/") {
 		if !h.limiter.Allow(msg.From.ID) {
-			h.sender.SendText(ctx, msg.Chat.ID, "⏳ Terlalu banyak request. Coba lagi nanti.")
+			h.sender.SendText(ctx, msg.Chat.ID, "⏳ Terlalu banyak request. Coba lagi nanti.", msg.MessageThreadID)
 			return
 		}
 	}
@@ -105,7 +105,7 @@ func (h *Handler) HandleUpdate(ctx context.Context, u Update) {
 	case strings.HasPrefix(text, "/report"):
 		h.cmdReport(ctx, msg)
 	case strings.HasPrefix(text, "/help"), strings.HasPrefix(text, "/start"):
-		h.sender.SendHTML(ctx, msg.Chat.ID, FormatHelp())
+		h.sender.SendHTML(ctx, msg.Chat.ID, FormatHelp(), msg.MessageThreadID)
 	case strings.HasPrefix(text, "#journal"):
 		h.handleTextJournal(ctx, msg, text)
 	}
@@ -115,7 +115,7 @@ func (h *Handler) HandleUpdate(ctx context.Context, u Update) {
 func (h *Handler) handleTextJournal(ctx context.Context, msg *Message, text string) {
 	result := ParseJournalMessage(text)
 	if result.Err != "" {
-		h.sender.SendHTML(ctx, msg.Chat.ID, "❌ "+result.Err)
+		h.sender.SendHTML(ctx, msg.Chat.ID, "❌ "+result.Err, msg.MessageThreadID)
 		return
 	}
 
@@ -129,7 +129,7 @@ func (h *Handler) handleTextJournal(ctx context.Context, msg *Message, text stri
 
 	if err := h.journal.RecordTrade(ctx, msg.From.ID, username, firstName, trade); err != nil {
 		h.logger.Error("record trade failed", "error", err)
-		h.sender.SendText(ctx, msg.Chat.ID, "❌ Gagal menyimpan trade: "+err.Error())
+		h.sender.SendText(ctx, msg.Chat.ID, "❌ Gagal menyimpan trade: "+err.Error(), msg.MessageThreadID)
 		return
 	}
 
@@ -138,7 +138,7 @@ func (h *Handler) handleTextJournal(ctx context.Context, msg *Message, text stri
 		h.uploadPhoto(ctx, msg.Photo, trade.ID)
 	}
 
-	h.sender.SendHTML(ctx, msg.Chat.ID, FormatTradeConfirmation(trade))
+	h.sender.SendHTML(ctx, msg.Chat.ID, FormatTradeConfirmation(trade), msg.MessageThreadID)
 }
 
 // cmdJournal starts the guided flow.
@@ -146,10 +146,10 @@ func (h *Handler) cmdJournal(ctx context.Context, msg *Message) {
 	if msg.From == nil {
 		return
 	}
-	session := h.guided.Start(msg.From.ID, msg.Chat.ID)
+	session := h.guided.Start(msg.From.ID, msg.Chat.ID, msg.MessageThreadID)
 	text, btns := StepPrompt(session)
 	rows := convertButtons(btns)
-	msgID, err := h.sender.SendWithKeyboard(ctx, msg.Chat.ID, text, rows)
+	msgID, err := h.sender.SendWithKeyboard(ctx, msg.Chat.ID, text, rows, msg.MessageThreadID)
 	if err != nil {
 		h.logger.Error("send guided prompt", "error", err)
 		return
@@ -171,7 +171,7 @@ func (h *Handler) cmdStats(ctx context.Context, msg *Message, text string) {
 		lookupUsername := strings.TrimPrefix(parts[1], "@")
 		member, err := h.findMemberByUsername(ctx, lookupUsername)
 		if err != nil || member == nil {
-			h.sender.SendText(ctx, msg.Chat.ID, fmt.Sprintf("📭 Member @%s belum pernah mencatat trade.", lookupUsername))
+			h.sender.SendText(ctx, msg.Chat.ID, fmt.Sprintf("📭 Member @%s belum pernah mencatat trade.", lookupUsername), msg.MessageThreadID)
 			return
 		}
 		targetID = member.TelegramID
@@ -180,15 +180,15 @@ func (h *Handler) cmdStats(ctx context.Context, msg *Message, text string) {
 
 	stats, err := h.journal.GetMemberStats(ctx, targetID)
 	if err != nil {
-		h.sender.SendText(ctx, msg.Chat.ID, "📭 Belum ada trade yang tercatat.")
+		h.sender.SendText(ctx, msg.Chat.ID, "📭 Belum ada trade yang tercatat.", msg.MessageThreadID)
 		return
 	}
 	if stats == nil {
-		h.sender.SendText(ctx, msg.Chat.ID, "📭 Belum ada trade yang tercatat.")
+		h.sender.SendText(ctx, msg.Chat.ID, "📭 Belum ada trade yang tercatat.", msg.MessageThreadID)
 		return
 	}
 
-	h.sender.SendHTML(ctx, msg.Chat.ID, FormatStats(targetUsername, stats))
+	h.sender.SendHTML(ctx, msg.Chat.ID, FormatStats(targetUsername, stats), msg.MessageThreadID)
 }
 
 // findMemberByUsername searches cached members by username.
@@ -214,11 +214,11 @@ func (h *Handler) cmdLeaderboard(ctx context.Context, msg *Message, text string)
 
 	entries, err := h.leaderboard.GetLeaderboard(ctx, metric, 10, 5)
 	if err != nil {
-		h.sender.SendText(ctx, msg.Chat.ID, "❌ Error: "+err.Error())
+		h.sender.SendText(ctx, msg.Chat.ID, "❌ Error: "+err.Error(), msg.MessageThreadID)
 		return
 	}
 
-	h.sender.SendHTML(ctx, msg.Chat.ID, FormatLeaderboard(entries, metric))
+	h.sender.SendHTML(ctx, msg.Chat.ID, FormatLeaderboard(entries, metric), msg.MessageThreadID)
 }
 
 // cmdExport exports the member's trades as CSV or PDF.
@@ -228,16 +228,16 @@ func (h *Handler) cmdExport(ctx context.Context, msg *Message, text string) {
 	}
 	trades, err := h.trades.GetTrades(ctx, msg.From.ID)
 	if err != nil {
-		h.sender.SendText(ctx, msg.Chat.ID, "📭 Belum ada trade untuk di-export.")
+		h.sender.SendText(ctx, msg.Chat.ID, "📭 Belum ada trade untuk di-export.", msg.MessageThreadID)
 		return
 	}
 	if len(trades) == 0 {
-		h.sender.SendText(ctx, msg.Chat.ID, "📭 Belum ada trade untuk di-export.")
+		h.sender.SendText(ctx, msg.Chat.ID, "📭 Belum ada trade untuk di-export.", msg.MessageThreadID)
 		return
 	}
 
 	if h.exporter == nil {
-		h.sender.SendText(ctx, msg.Chat.ID, "⚠️ Export belum tersedia.")
+		h.sender.SendText(ctx, msg.Chat.ID, "⚠️ Export belum tersedia.", msg.MessageThreadID)
 		return
 	}
 
@@ -258,19 +258,19 @@ func (h *Handler) cmdExport(ctx context.Context, msg *Message, text string) {
 		stats, _ := h.journal.GetMemberStats(ctx, msg.From.ID)
 		data, err := h.exporter.ExportPDF(ctx, username, trades, stats)
 		if err != nil {
-			h.sender.SendText(ctx, msg.Chat.ID, "❌ Export PDF gagal: "+err.Error())
+			h.sender.SendText(ctx, msg.Chat.ID, "❌ Export PDF gagal: "+err.Error(), msg.MessageThreadID)
 			return
 		}
 		filename := fmt.Sprintf("journal_%s.pdf", username)
-		h.sender.SendDocument(ctx, msg.Chat.ID, filename, data, "📊 Export trade journal (PDF)")
+		h.sender.SendDocument(ctx, msg.Chat.ID, filename, data, "📊 Export trade journal (PDF)", msg.MessageThreadID)
 	default:
 		data, err := h.exporter.ExportCSV(ctx, trades)
 		if err != nil {
-			h.sender.SendText(ctx, msg.Chat.ID, "❌ Export CSV gagal: "+err.Error())
+			h.sender.SendText(ctx, msg.Chat.ID, "❌ Export CSV gagal: "+err.Error(), msg.MessageThreadID)
 			return
 		}
 		filename := fmt.Sprintf("journal_%s.csv", username)
-		h.sender.SendDocument(ctx, msg.Chat.ID, filename, data, "📊 Export trade journal (CSV)")
+		h.sender.SendDocument(ctx, msg.Chat.ID, filename, data, "📊 Export trade journal (CSV)", msg.MessageThreadID)
 	}
 }
 
@@ -282,11 +282,11 @@ func (h *Handler) cmdReport(ctx context.Context, msg *Message) {
 
 	summary, err := h.report.GenerateWeeklySummary(ctx, weekStart, weekEnd)
 	if err != nil {
-		h.sender.SendText(ctx, msg.Chat.ID, "❌ Gagal generate report: "+err.Error())
+		h.sender.SendText(ctx, msg.Chat.ID, "❌ Gagal generate report: "+err.Error(), msg.MessageThreadID)
 		return
 	}
 
-	h.sender.SendHTML(ctx, msg.Chat.ID, FormatWeeklySummary(summary))
+	h.sender.SendHTML(ctx, msg.Chat.ID, FormatWeeklySummary(summary), msg.MessageThreadID)
 }
 
 // SendScheduledReport sends the weekly report to a specific chat and optional topic thread.
@@ -401,7 +401,7 @@ func (h *Handler) handleGuidedInput(ctx context.Context, msg *Message, session *
 	case StepRRAmount:
 		v, err := strconv.ParseFloat(text, 64)
 		if err != nil {
-			h.sender.SendText(ctx, msg.Chat.ID, "❌ Masukkan angka yang valid untuk RR (contoh: 2, 1.5).")
+			h.sender.SendText(ctx, msg.Chat.ID, "❌ Masukkan angka yang valid untuk RR (contoh: 2, 1.5).", session.ThreadID)
 			return
 		}
 		if session.Trade.Status == domain.StatusWin {
@@ -431,7 +431,7 @@ func (h *Handler) handleGuidedInput(ctx context.Context, msg *Message, session *
 			session.PhotoFileID = photo.FileID
 			session.Step = StepConfirm
 		} else {
-			h.sender.SendText(ctx, msg.Chat.ID, "❌ Kirim foto, atau tekan Skip.")
+			h.sender.SendText(ctx, msg.Chat.ID, "❌ Kirim foto, atau tekan Skip.", session.ThreadID)
 			return
 		}
 
@@ -443,10 +443,10 @@ func (h *Handler) handleGuidedInput(ctx context.Context, msg *Message, session *
 	promptText, btns := StepPrompt(session)
 	rows := convertButtons(btns)
 	if len(rows) > 0 {
-		msgID, _ := h.sender.SendWithKeyboard(ctx, msg.Chat.ID, promptText, rows)
+		msgID, _ := h.sender.SendWithKeyboard(ctx, msg.Chat.ID, promptText, rows, session.ThreadID)
 		session.MsgID = msgID
 	} else {
-		msgID, _ := h.sender.SendHTML(ctx, msg.Chat.ID, promptText)
+		msgID, _ := h.sender.SendHTML(ctx, msg.Chat.ID, promptText, session.ThreadID)
 		session.MsgID = msgID
 	}
 }
@@ -461,7 +461,7 @@ func (h *Handler) submitGuidedTrade(ctx context.Context, from *User, session *Gu
 	err := h.journal.RecordTrade(ctx, from.ID, from.Username, from.FirstName, trade)
 	if err != nil {
 		h.logger.Error("guided submit failed", "error", err)
-		h.sender.SendText(ctx, session.ChatID, "❌ Gagal menyimpan: "+err.Error())
+		h.sender.SendText(ctx, session.ChatID, "❌ Gagal menyimpan: "+err.Error(), session.ThreadID)
 		h.guided.Remove(from.ID)
 		return
 	}
@@ -471,7 +471,7 @@ func (h *Handler) submitGuidedTrade(ctx context.Context, from *User, session *Gu
 		h.uploadPhoto(ctx, []PhotoSize{{FileID: session.PhotoFileID}}, trade.ID)
 	}
 
-	h.sender.SendHTML(ctx, session.ChatID, FormatTradeConfirmation(trade))
+	h.sender.SendHTML(ctx, session.ChatID, FormatTradeConfirmation(trade), session.ThreadID)
 	h.guided.Remove(from.ID)
 }
 

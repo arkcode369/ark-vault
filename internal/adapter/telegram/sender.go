@@ -76,11 +76,15 @@ func extractMsgID(raw json.RawMessage) (int, error) {
 }
 
 // SendText sends a plain text message.
-func (s *Sender) SendText(ctx context.Context, chatID int64, text string) (int, error) {
-	raw, err := s.call(ctx, "sendMessage", map[string]interface{}{
+func (s *Sender) SendText(ctx context.Context, chatID int64, text string, threadID ...int) (int, error) {
+	payload := map[string]interface{}{
 		"chat_id": chatID,
 		"text":    text,
-	})
+	}
+	if len(threadID) > 0 && threadID[0] > 0 {
+		payload["message_thread_id"] = threadID[0]
+	}
+	raw, err := s.call(ctx, "sendMessage", payload)
 	if err != nil {
 		return 0, err
 	}
@@ -88,12 +92,16 @@ func (s *Sender) SendText(ctx context.Context, chatID int64, text string) (int, 
 }
 
 // SendHTML sends an HTML-formatted message.
-func (s *Sender) SendHTML(ctx context.Context, chatID int64, html string) (int, error) {
-	raw, err := s.call(ctx, "sendMessage", map[string]interface{}{
+func (s *Sender) SendHTML(ctx context.Context, chatID int64, html string, threadID ...int) (int, error) {
+	payload := map[string]interface{}{
 		"chat_id":    chatID,
 		"text":       html,
 		"parse_mode": "HTML",
-	})
+	}
+	if len(threadID) > 0 && threadID[0] > 0 {
+		payload["message_thread_id"] = threadID[0]
+	}
+	raw, err := s.call(ctx, "sendMessage", payload)
 	if err != nil {
 		return 0, err
 	}
@@ -119,13 +127,17 @@ func (s *Sender) SendHTMLToThread(ctx context.Context, chatID int64, threadID in
 }
 
 // SendWithKeyboard sends a message with inline keyboard.
-func (s *Sender) SendWithKeyboard(ctx context.Context, chatID int64, text string, rows [][]ports.InlineButton) (int, error) {
-	raw, err := s.call(ctx, "sendMessage", map[string]interface{}{
+func (s *Sender) SendWithKeyboard(ctx context.Context, chatID int64, text string, rows [][]ports.InlineButton, threadID ...int) (int, error) {
+	payload := map[string]interface{}{
 		"chat_id":      chatID,
 		"text":         text,
 		"parse_mode":   "HTML",
 		"reply_markup": buildKeyboard(rows),
-	})
+	}
+	if len(threadID) > 0 && threadID[0] > 0 {
+		payload["message_thread_id"] = threadID[0]
+	}
+	raw, err := s.call(ctx, "sendMessage", payload)
 	if err != nil {
 		return 0, err
 	}
@@ -174,13 +186,16 @@ func (s *Sender) DeleteMessage(ctx context.Context, chatID int64, msgID int) err
 }
 
 // SendDocument sends a file to the chat.
-func (s *Sender) SendDocument(ctx context.Context, chatID int64, filename string, data []byte, caption string) error {
+func (s *Sender) SendDocument(ctx context.Context, chatID int64, filename string, data []byte, caption string, threadID ...int) error {
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)
 
 	_ = w.WriteField("chat_id", fmt.Sprintf("%d", chatID))
 	if caption != "" {
 		_ = w.WriteField("caption", caption)
+	}
+	if len(threadID) > 0 && threadID[0] > 0 {
+		_ = w.WriteField("message_thread_id", fmt.Sprintf("%d", threadID[0]))
 	}
 	part, err := w.CreateFormFile("document", filename)
 	if err != nil {

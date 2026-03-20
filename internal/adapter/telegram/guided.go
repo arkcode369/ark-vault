@@ -27,13 +27,14 @@ const (
 
 // GuidedSession holds the in-progress state for one user's guided flow.
 type GuidedSession struct {
-	Step       GuidedStep
-	Trade      domain.Trade
-	ChatID     int64
-	MsgID      int // last bot message ID, for editing
-	PhotoURL   string
+	Step        GuidedStep
+	Trade       domain.Trade
+	ChatID      int64
+	ThreadID    int
+	MsgID       int // last bot message ID, for editing
+	PhotoURL    string
 	PhotoFileID string
-	ExpiresAt  time.Time
+	ExpiresAt   time.Time
 }
 
 // GuidedFlow manages guided journal sessions per user.
@@ -54,12 +55,13 @@ func NewGuidedFlow() *GuidedFlow {
 }
 
 // Start creates a new session for the user.
-func (gf *GuidedFlow) Start(userID int64, chatID int64) *GuidedSession {
+func (gf *GuidedFlow) Start(userID int64, chatID int64, threadID int) *GuidedSession {
 	gf.mu.Lock()
 	defer gf.mu.Unlock()
 	s := &GuidedSession{
 		Step:      StepAssetType,
 		ChatID:    chatID,
+		ThreadID:  threadID,
 		ExpiresAt: time.Now().Add(gf.ttl),
 	}
 	gf.sessions[userID] = s

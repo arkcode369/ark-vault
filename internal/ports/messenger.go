@@ -11,14 +11,14 @@ type InlineButton struct {
 // Messenger abstracts the messaging platform (Telegram).
 type Messenger interface {
 	// SendText sends a plain-text message and returns the message ID.
-	SendText(ctx context.Context, chatID int64, text string) (int, error)
+	SendText(ctx context.Context, chatID int64, text string, threadID ...int) (int, error)
 
 	// SendHTML sends an HTML-formatted message.
-	SendHTML(ctx context.Context, chatID int64, html string) (int, error)
+	SendHTML(ctx context.Context, chatID int64, html string, threadID ...int) (int, error)
 
 	// SendWithKeyboard sends a message with inline keyboard buttons.
 	// rows is a 2D slice: each inner slice is one row of buttons.
-	SendWithKeyboard(ctx context.Context, chatID int64, text string, rows [][]InlineButton) (int, error)
+	SendWithKeyboard(ctx context.Context, chatID int64, text string, rows [][]InlineButton, threadID ...int) (int, error)
 
 	// EditMessage replaces the text of an existing message.
 	EditMessage(ctx context.Context, chatID int64, msgID int, text string) error
@@ -33,5 +33,5 @@ type Messenger interface {
 	DeleteMessage(ctx context.Context, chatID int64, msgID int) error
 
 	// SendDocument sends a file (e.g. CSV export) to the chat.
-	SendDocument(ctx context.Context, chatID int64, filename string, data []byte, caption string) error
+	SendDocument(ctx context.Context, chatID int64, filename string, data []byte, caption string, threadID ...int) error
 }
