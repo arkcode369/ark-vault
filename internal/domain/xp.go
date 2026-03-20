@@ -26,22 +26,22 @@ type LevelThreshold struct {
 
 // LevelTable is the ordered list of level thresholds.
 var LevelTable = []LevelThreshold{
-	{1, 0, "Bronze V"},
-	{2, 50, "Bronze IV"},
-	{3, 150, "Bronze III"},
-	{4, 350, "Silver II"},
-	{5, 600, "Silver I"},
-	{6, 1000, "Gold II"},
-	{7, 1500, "Gold I"},
-	{8, 2200, "Platinum"},
-	{9, 3000, "Diamond"},
-	{10, 4000, "Obsidian"},
+	{1, 0, "Retail"},
+	{2, 50, "Chartist"},
+	{3, 150, "Analyst"},
+	{4, 350, "Strategist"},
+	{5, 600, "Systematic"},
+	{6, 1000, "Algorithmic"},
+	{7, 1500, "Quantitative"},
+	{8, 2200, "Portfolio Manager"},
+	{9, 3000, "Fund Manager"},
+	{10, 4000, "Market Maker"},
 }
 
 // LevelForXP returns the level and title for the given XP amount.
 func LevelForXP(xp int) (int, string) {
 	level := 1
-	title := "Bronze V"
+	title := "Retail"
 	for _, lt := range LevelTable {
 		if xp >= lt.XP {
 			level = lt.Level
