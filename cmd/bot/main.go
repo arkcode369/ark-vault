@@ -147,7 +147,7 @@ func main() {
 				now := time.Now().In(wib)
 				dayMatch := isDayOfWeek(now, cfg.ReportDay)
 				hourMatch := now.Hour() == cfg.ReportHour
-				if dayMatch && hourMatch {
+				if dayMatch && hourMatch && sched.MarkAndCheck("weekly-report", now) {
 					logger.Info("posting scheduled weekly report", "chat_id", cfg.ReportChatID, "thread_id", cfg.ReportThreadID)
 					return handler.SendScheduledReport(ctx, cfg.ReportChatID, cfg.ReportThreadID)
 				}
@@ -164,10 +164,7 @@ func main() {
 		Run: func(ctx context.Context) error {
 			now := time.Now().In(wib)
 			// Finalize on Sunday at report hour
-			if now.Weekday() == time.Sunday && now.Hour() == cfg.ReportHour {
-				// On Sunday, finalize the current week's challenge.
-				// ISOWeek treats Mon-Sun as one week, so Sunday belongs
-				// to the same ISO week as the preceding Mon-Sat.
+			if now.Weekday() == time.Sunday && now.Hour() == cfg.ReportHour && sched.MarkAndCheck("challenge-finalize", now) {
 				yearWeek := domain.YearWeekString(now)
 				results, err := challengeSvc.FinalizeChallenge(ctx, yearWeek)
 				if err != nil {
@@ -191,7 +188,7 @@ func main() {
 		Run: func(ctx context.Context) error {
 			now := time.Now().In(wib)
 			// Announce on Monday at configured report hour (WIB)
-			if now.Weekday() == time.Monday && now.Hour() == cfg.ReportHour {
+			if now.Weekday() == time.Monday && now.Hour() == cfg.ReportHour && sched.MarkAndCheck("challenge-announce", now) {
 				challenge, err := challengeSvc.GetOrCreateChallenge(ctx, now)
 				if err != nil {
 					return err
@@ -209,6 +206,10 @@ func main() {
 		Name:     "daily-reminder",
 		Interval: 1 * time.Hour,
 		Run: func(ctx context.Context) error {
+			now := time.Now().In(wib)
+			if !sched.MarkAndCheck("daily-reminder", now) {
+				return nil
+			}
 			dueReminders, err := reminderSvc.GetDueReminders(ctx)
 			if err != nil {
 				return err
@@ -235,7 +236,7 @@ func main() {
 			}
 			now := time.Now().In(wib)
 			// Generate on 1st of month at report hour
-			if now.Day() == 1 && now.Hour() == cfg.ReportHour {
+			if now.Day() == 1 && now.Hour() == cfg.ReportHour && sched.MarkAndCheck("monthly-report-card", now) {
 				lastMonth := now.AddDate(0, -1, 0).Format("2006-01")
 				members, err := memberRepo.ListMembers(ctx)
 				if err != nil {

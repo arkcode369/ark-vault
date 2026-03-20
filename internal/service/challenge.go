@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"math"
 	"sort"
 	"time"
 
@@ -110,6 +111,7 @@ func (s *ChallengeService) GetCurrentStandings(ctx context.Context, challenge *d
 		case domain.ChallengeMostTrades:
 			value = float64(len(weekTrades))
 		case domain.ChallengeBestRR:
+			value = math.Inf(-1)
 			for _, t := range weekTrades {
 				if t.ResultRR > value {
 					value = t.ResultRR

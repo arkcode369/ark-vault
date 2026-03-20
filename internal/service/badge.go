@@ -51,16 +51,20 @@ func (s *BadgeService) CheckAndAwardBadges(ctx context.Context, memberID int64, 
 		}
 	}
 
-	// 3. Calculate win rate.
-	var wins int
+	// 3. Calculate win rate (closed trades only: win + loss + BE).
+	var wins, closedTrades int
 	for _, t := range trades {
-		if t.Status == domain.StatusWin {
+		switch t.Status {
+		case domain.StatusWin:
 			wins++
+			closedTrades++
+		case domain.StatusLoss, domain.StatusBE:
+			closedTrades++
 		}
 	}
 	var winRate float64
-	if totalTrades > 0 {
-		winRate = float64(wins) / float64(totalTrades) * 100
+	if closedTrades > 0 {
+		winRate = float64(wins) / float64(closedTrades) * 100
 	}
 
 	// 4. Calculate monthly RR (current month in WIB).
@@ -89,7 +93,7 @@ func (s *BadgeService) CheckAndAwardBadges(ctx context.Context, memberID int64, 
 		{domain.BadgeStreak30, streak != nil && streak.CurrentStreak >= 30},
 		{domain.BadgeFirstGreenMo, monthRR > 0},
 		{domain.Badge10RMonth, monthRR >= 10},
-		{domain.BadgeWinrate60, winRate >= 60 && totalTrades >= 20},
+		{domain.BadgeWinrate60, winRate >= 60 && closedTrades >= 20},
 	}
 
 	// 6. Check each condition and award if not already earned.

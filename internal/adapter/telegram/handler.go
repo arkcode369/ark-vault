@@ -41,6 +41,7 @@ type Handler struct {
 	logger           *slog.Logger
 	communityGroupID int64
 	ownerID          int64
+	unauthNotified   map[int64]time.Time // per-user last owner-notification time
 }
 
 // NewHandler creates a Handler.
@@ -66,6 +67,7 @@ func NewHandler(
 		logger:           logger,
 		communityGroupID: communityGroupID,
 		ownerID:          ownerID,
+		unauthNotified:   make(map[int64]time.Time),
 	}
 }
 
@@ -98,11 +100,14 @@ func (h *Handler) isAuthorized(ctx context.Context, userID int64, chatID int64, 
 			}
 			h.sender.SendHTML(ctx, chatID, msg, threadID)
 		}
-		// Notify owner about unauthorized access attempt
+		// Notify owner about unauthorized access attempt (at most once per user per hour)
 		if h.ownerID > 0 {
-			notif := fmt.Sprintf("⚠️ <b>Unauthorized access attempt</b>\n\nUser: <a href=\"tg://user?id=%d\">%d</a>\nChat: <code>%d</code>\nType: %s",
-				userID, userID, chatID, chatType)
-			h.sender.SendHTML(ctx, h.ownerID, notif)
+			if last, ok := h.unauthNotified[userID]; !ok || time.Since(last) > 1*time.Hour {
+				h.unauthNotified[userID] = time.Now()
+				notif := fmt.Sprintf("⚠️ <b>Unauthorized access attempt</b>\n\nUser: <a href=\"tg://user?id=%d\">%d</a>\nChat: <code>%d</code>\nType: %s",
+					userID, userID, chatID, chatType)
+				h.sender.SendHTML(ctx, h.ownerID, notif)
+			}
 		}
 		return false
 	}
@@ -192,12 +197,8 @@ func (h *Handler) handleTextJournal(ctx context.Context, msg *Message, text stri
 	}
 
 	trade := result.Trade
-	username := ""
-	firstName := ""
-	if msg.From != nil {
-		username = msg.From.Username
-		firstName = msg.From.FirstName
-	}
+	username := msg.From.Username
+	firstName := msg.From.FirstName
 
 	if err := h.svc.Journal.RecordTrade(ctx, msg.From.ID, username, firstName, trade); err != nil {
 		h.logger.Error("record trade failed", "error", err)
@@ -428,10 +429,25 @@ func (h *Handler) handleCallback(ctx context.Context, cb *CallbackQuery) {
 		return
 	}
 
+	data := cb.Data
+
+	// Handle confirm actions WITHOUT holding session.mu to avoid deadlock
+	// (submitGuidedTrade acquires session.mu internally)
+	switch {
+	case data == "confirm:yes":
+		h.submitGuidedTrade(ctx, cb.From, session)
+		return
+	case data == "confirm:no":
+		h.guided.Remove(cb.From.ID)
+		if cb.Message != nil {
+			h.sender.EditMessage(ctx, cb.Message.Chat.ID, cb.Message.MessageID, "❌ Trade dibatalkan.")
+		}
+		return
+	}
+
+	// For all other callbacks, lock the session to mutate step/trade fields
 	session.mu.Lock()
 	defer session.mu.Unlock()
-
-	data := cb.Data
 
 	switch {
 	case strings.HasPrefix(data, "asset:"):
@@ -480,17 +496,6 @@ func (h *Handler) handleCallback(ctx context.Context, cb *CallbackQuery) {
 
 	case data == "screenshot:skip":
 		session.Step = StepConfirm
-
-	case data == "confirm:yes":
-		h.submitGuidedTrade(ctx, cb.From, session)
-		return
-
-	case data == "confirm:no":
-		h.guided.Remove(cb.From.ID)
-		if cb.Message != nil {
-			h.sender.EditMessage(ctx, cb.Message.Chat.ID, cb.Message.MessageID, "❌ Trade dibatalkan.")
-		}
-		return
 	}
 
 	// Update the prompt message

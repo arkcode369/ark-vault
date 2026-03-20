@@ -34,6 +34,7 @@ func CalculateStats(trades []Trade) Stats {
 	var rrCount int
 	var curStreak, maxWin int
 
+	bestInit := false
 	for _, t := range trades {
 		s.TotalTrades++
 
@@ -77,11 +78,17 @@ func CalculateStats(trades []Trade) Stats {
 			rrCount++
 		}
 
-		if t.ResultRR > s.BestRR {
+		if !bestInit {
 			s.BestRR = t.ResultRR
-		}
-		if t.ResultRR < s.WorstRR {
 			s.WorstRR = t.ResultRR
+			bestInit = true
+		} else {
+			if t.ResultRR > s.BestRR {
+				s.BestRR = t.ResultRR
+			}
+			if t.ResultRR < s.WorstRR {
+				s.WorstRR = t.ResultRR
+			}
 		}
 
 		// Update per-asset win rate
