@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -13,6 +14,7 @@ import (
 	"github.com/arkcode369/ark-vault/internal/adapter/telegram"
 	badgerdb "github.com/arkcode369/ark-vault/internal/adapter/badger"
 	"github.com/arkcode369/ark-vault/internal/config"
+	"github.com/arkcode369/ark-vault/internal/domain"
 	"github.com/arkcode369/ark-vault/internal/scheduler"
 	"github.com/arkcode369/ark-vault/internal/service"
 )
@@ -52,6 +54,12 @@ func main() {
 	gamRepo := badgerdb.NewGamificationRepo(store)
 	gamSvc := service.NewGamificationService(gamRepo, tradeRepo, memberRepo)
 
+	// Badge & Challenge services
+	badgeRepo := badgerdb.NewBadgeRepo(store)
+	challengeRepo := badgerdb.NewChallengeRepo(store)
+	badgeSvc := service.NewBadgeService(badgeRepo, tradeRepo, gamSvc)
+	challengeSvc := service.NewChallengeService(challengeRepo, tradeRepo, memberRepo, gamSvc, badgeSvc)
+
 	// Exporter (CSV + PDF)
 	exp := exporter.NewExporter()
 
@@ -65,6 +73,8 @@ func main() {
 		Leaderboard:  leaderboardSvc,
 		Report:       reportSvc,
 		Gamification: gamSvc,
+		Badge:        badgeSvc,
+		Challenge:    challengeSvc,
 	}
 	handler := telegram.NewHandler(
 		sender, svc, exp, tradeRepo, memberRepo, limiter, logger,
@@ -86,9 +96,11 @@ func main() {
 		cancel()
 	}()
 
-	// Scheduler: weekly report auto-post
+	// Scheduler
+	sched := scheduler.NewScheduler(logger)
+
+	// Weekly report auto-post
 	if cfg.ReportChatID != 0 {
-		sched := scheduler.NewScheduler(logger)
 		sched.Add(scheduler.Job{
 			Name:     "weekly-report",
 			Interval: 1 * time.Hour, // check hourly
@@ -103,9 +115,58 @@ func main() {
 				return nil
 			},
 		})
-		go sched.Start(ctx)
-		logger.Info("scheduler started", "report_day", cfg.ReportDay, "report_hour", cfg.ReportHour)
+		logger.Info("scheduler: weekly-report enabled", "report_day", cfg.ReportDay, "report_hour", cfg.ReportHour)
 	}
+
+	// Challenge scheduler jobs
+	sched.Add(scheduler.Job{
+		Name:     "challenge-finalize",
+		Interval: 1 * time.Hour,
+		Run: func(ctx context.Context) error {
+			now := time.Now().UTC()
+			// Finalize on Sunday at report hour
+			if now.Weekday() == time.Sunday && now.Hour() == cfg.ReportHour {
+				// Get last week's challenge
+				lastWeek := now.AddDate(0, 0, -7)
+				yearWeek := domain.YearWeekString(lastWeek)
+				results, err := challengeSvc.FinalizeChallenge(ctx, yearWeek)
+				if err != nil {
+					return err
+				}
+				if len(results) > 0 && cfg.ReportChatID != 0 {
+					challenge, _ := challengeSvc.GetOrCreateChallenge(ctx, lastWeek)
+					if challenge != nil {
+						text := telegram.FormatChallengeResults(challenge, results)
+						sender.SendHTML(ctx, cfg.ReportChatID, text, cfg.ReportThreadID)
+					}
+				}
+			}
+			return nil
+		},
+	})
+
+	sched.Add(scheduler.Job{
+		Name:     "challenge-announce",
+		Interval: 1 * time.Hour,
+		Run: func(ctx context.Context) error {
+			now := time.Now().UTC()
+			// Announce on Monday at 8
+			if now.Weekday() == time.Monday && now.Hour() == 8 {
+				challenge, err := challengeSvc.GetOrCreateChallenge(ctx, now)
+				if err != nil {
+					return err
+				}
+				if cfg.ReportChatID != 0 {
+					text := fmt.Sprintf("⚔️ <b>New Weekly Challenge!</b>\n\n<b>%s</b>\n%s\n\nGunakan /challenge untuk melihat standings.", challenge.Title, challenge.Description)
+					sender.SendHTML(ctx, cfg.ReportChatID, text, cfg.ReportThreadID)
+				}
+			}
+			return nil
+		},
+	})
+
+	go sched.Start(ctx)
+	logger.Info("scheduler started")
 
 	logger.Info("ark-vault bot starting")
 	if err := bot.Start(ctx); err != nil && err != context.Canceled {

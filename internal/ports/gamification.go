@@ -16,3 +16,19 @@ type GamificationStore interface {
 	AppendXPEvent(ctx context.Context, event *domain.XPEvent) error
 	GetXPEvents(ctx context.Context, telegramID int64, since time.Time) ([]domain.XPEvent, error)
 }
+
+// BadgeStore provides storage for badge awards.
+type BadgeStore interface {
+	GetBadges(ctx context.Context, telegramID int64) ([]domain.BadgeAward, error)
+	HasBadge(ctx context.Context, telegramID int64, badgeID domain.BadgeID) (bool, error)
+	AwardBadge(ctx context.Context, award *domain.BadgeAward) error
+}
+
+// ChallengeStore provides storage for weekly challenges.
+type ChallengeStore interface {
+	GetChallenge(ctx context.Context, yearWeek string) (*domain.WeeklyChallenge, error)
+	SaveChallenge(ctx context.Context, challenge *domain.WeeklyChallenge) error
+	GetChallengeEntry(ctx context.Context, yearWeek string, telegramID int64) (*domain.ChallengeEntry, error)
+	SaveChallengeEntry(ctx context.Context, entry *domain.ChallengeEntry) error
+	GetChallengeEntries(ctx context.Context, yearWeek string) ([]domain.ChallengeEntry, error)
+}

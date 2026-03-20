@@ -20,6 +20,8 @@ type Services struct {
 	Leaderboard  *service.LeaderboardService
 	Report       *service.ReportService
 	Gamification *service.GamificationService
+	Badge        *service.BadgeService
+	Challenge    *service.ChallengeService
 }
 
 // Handler routes incoming Telegram updates to the appropriate logic.
@@ -156,6 +158,10 @@ func (h *Handler) HandleUpdate(ctx context.Context, u Update) {
 		h.sender.SendHTML(ctx, msg.Chat.ID, FormatHelp(), msg.MessageThreadID)
 	case strings.HasPrefix(text, "/profile"):
 		h.cmdProfile(ctx, msg)
+	case strings.HasPrefix(text, "/badges"):
+		h.cmdBadges(ctx, msg)
+	case strings.HasPrefix(text, "/challenge"):
+		h.cmdChallenge(ctx, msg)
 	case strings.HasPrefix(text, "#journal"):
 		h.handleTextJournal(ctx, msg, text)
 	}
@@ -192,6 +198,14 @@ func (h *Handler) handleTextJournal(ctx context.Context, msg *Message, text stri
 		gamResult, _ := h.svc.Gamification.OnTradeRecorded(ctx, msg.From.ID, trade)
 		if gamResult != nil {
 			h.sender.SendHTML(ctx, msg.Chat.ID, FormatTradeConfirmationWithXP(trade, gamResult.XPGained, gamResult.TotalXP, gamResult.Level, gamResult.Title, gamResult.LeveledUp, gamResult.Streak), msg.MessageThreadID)
+			// Check for new badges
+			if h.svc.Badge != nil {
+				streak, _ := h.svc.Gamification.GetStreak(ctx, msg.From.ID)
+				newBadges, _ := h.svc.Badge.CheckAndAwardBadges(ctx, msg.From.ID, trade, streak)
+				if len(newBadges) > 0 {
+					h.sender.SendHTML(ctx, msg.Chat.ID, FormatBadgeUnlock(newBadges), msg.MessageThreadID)
+				}
+			}
 			return
 		}
 	}
@@ -561,6 +575,14 @@ func (h *Handler) submitGuidedTrade(ctx context.Context, from *User, session *Gu
 		} else {
 			// Send enhanced confirmation with XP info
 			h.sender.SendHTML(ctx, session.ChatID, FormatTradeConfirmationWithXP(trade, gamResult.XPGained, gamResult.TotalXP, gamResult.Level, gamResult.Title, gamResult.LeveledUp, gamResult.Streak), session.ThreadID)
+			// Check for new badges
+			if h.svc.Badge != nil {
+				streak, _ := h.svc.Gamification.GetStreak(ctx, from.ID)
+				newBadges, _ := h.svc.Badge.CheckAndAwardBadges(ctx, from.ID, trade, streak)
+				if len(newBadges) > 0 {
+					h.sender.SendHTML(ctx, session.ChatID, FormatBadgeUnlock(newBadges), session.ThreadID)
+				}
+			}
 			h.guided.Remove(from.ID)
 			return
 		}
@@ -604,4 +626,35 @@ func convertButtons(btns [][]InlineBtn) [][]ports.InlineButton {
 		}
 	}
 	return rows
+}
+
+// cmdBadges shows the user's earned badges.
+func (h *Handler) cmdBadges(ctx context.Context, msg *Message) {
+	if msg.From == nil || h.svc.Badge == nil {
+		return
+	}
+	badges, err := h.svc.Badge.GetBadges(ctx, msg.From.ID)
+	if err != nil {
+		h.sender.SendText(ctx, msg.Chat.ID, "❌ Gagal memuat badges.", msg.MessageThreadID)
+		return
+	}
+	h.sender.SendHTML(ctx, msg.Chat.ID, FormatBadgeList(badges), msg.MessageThreadID)
+}
+
+// cmdChallenge shows the current weekly challenge and standings.
+func (h *Handler) cmdChallenge(ctx context.Context, msg *Message) {
+	if msg.From == nil || h.svc.Challenge == nil {
+		return
+	}
+	challenge, err := h.svc.Challenge.GetOrCreateChallenge(ctx, time.Now())
+	if err != nil {
+		h.sender.SendText(ctx, msg.Chat.ID, "❌ Gagal memuat challenge.", msg.MessageThreadID)
+		return
+	}
+	standings, err := h.svc.Challenge.GetCurrentStandings(ctx, challenge)
+	if err != nil {
+		h.sender.SendText(ctx, msg.Chat.ID, "❌ Gagal memuat standings.", msg.MessageThreadID)
+		return
+	}
+	h.sender.SendHTML(ctx, msg.Chat.ID, FormatChallenge(challenge, standings), msg.MessageThreadID)
 }

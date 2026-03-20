@@ -166,6 +166,33 @@ func (s *GamificationService) OnTradeRecorded(ctx context.Context, memberID int6
 	}, nil
 }
 
+// AwardXP grants the given amount of XP to a member for the specified reason.
+// It updates the profile, appends an XP event, and returns the updated profile.
+func (s *GamificationService) AwardXP(ctx context.Context, memberID int64, amount int, reason string) (*domain.GamificationProfile, error) {
+	profile, err := s.GetProfile(ctx, memberID)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now().In(wib)
+	profile.TotalXP += amount
+	profile.Level, profile.Title = domain.LevelForXP(profile.TotalXP)
+	profile.UpdatedAt = now
+
+	if err := s.store.SaveProfile(ctx, profile); err != nil {
+		return nil, err
+	}
+	if err := s.store.AppendXPEvent(ctx, &domain.XPEvent{
+		TelegramID: memberID,
+		Amount:     amount,
+		Reason:     reason,
+		Timestamp:  now,
+	}); err != nil {
+		return nil, err
+	}
+	return profile, nil
+}
+
 // GetProfile returns the gamification profile for the member, creating a default if none exists.
 func (s *GamificationService) GetProfile(ctx context.Context, memberID int64) (*domain.GamificationProfile, error) {
 	profile, err := s.store.GetProfile(ctx, memberID)

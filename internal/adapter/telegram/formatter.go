@@ -3,6 +3,7 @@ package telegram
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/arkcode369/ark-vault/internal/domain"
 	"github.com/arkcode369/ark-vault/internal/service"
@@ -129,6 +130,8 @@ Confluence: FVG + OB mitigation on 15m</pre>
 
 <b>Lainnya:</b>
 • /profile — Profil & level gamifikasi
+• /badges — Koleksi badge
+• /challenge — Weekly challenge & standings
 • /help — Tampilkan pesan ini
 
 <b>Tips:</b>
@@ -256,5 +259,119 @@ func FormatProfile(profile *domain.GamificationProfile, streak *domain.StreakDat
 	sb.WriteString(fmt.Sprintf("\n🔥 Streak: <b>%d</b> hari berturut-turut\n", curStreak))
 	sb.WriteString(fmt.Sprintf("📊 Streak terpanjang: <b>%d</b> hari\n", longestStreak))
 
+	return sb.String()
+}
+
+// FormatBadgeList formats the user's badge collection.
+func FormatBadgeList(badges []domain.BadgeAward) string {
+	var sb strings.Builder
+	sb.WriteString("🏅 <b>Badge Collection</b>\n\n")
+
+	if len(badges) == 0 {
+		sb.WriteString("Belum ada badge. Terus trading untuk mendapatkan badge pertamamu!")
+		return sb.String()
+	}
+
+	earnedMap := make(map[domain.BadgeID]time.Time)
+	for _, b := range badges {
+		earnedMap[b.BadgeID] = b.AwardedAt
+	}
+
+	for _, def := range domain.BadgeRegistry {
+		if t, ok := earnedMap[def.ID]; ok {
+			sb.WriteString(fmt.Sprintf("%s <b>%s</b> — %s\n   <i>Earned %s</i>\n", def.Emoji, def.Name, def.Description, t.Format("02 Jan 2006")))
+		} else {
+			sb.WriteString(fmt.Sprintf("🔒 <s>%s</s> — %s\n", def.Name, def.Description))
+		}
+	}
+
+	sb.WriteString(fmt.Sprintf("\n📊 %d/%d badges earned", len(badges), len(domain.BadgeRegistry)))
+	return sb.String()
+}
+
+// FormatBadgeUnlock formats notification for newly earned badges.
+func FormatBadgeUnlock(badges []domain.BadgeAward) string {
+	var sb strings.Builder
+	for _, b := range badges {
+		def := domain.GetBadgeDefinition(b.BadgeID)
+		if def != nil {
+			sb.WriteString(fmt.Sprintf("\n🎖 <b>Badge Unlocked!</b> %s %s\n<i>%s</i>\n", def.Emoji, def.Name, def.Description))
+		}
+	}
+	return sb.String()
+}
+
+// FormatChallenge formats the weekly challenge and standings.
+func FormatChallenge(c *domain.WeeklyChallenge, standings []domain.ChallengeResult) string {
+	var sb strings.Builder
+	sb.WriteString("⚔️ <b>Weekly Challenge</b>\n")
+	sb.WriteString(fmt.Sprintf("📅 %s\n\n", c.YearWeek))
+	sb.WriteString(fmt.Sprintf("<b>%s</b>\n", c.Title))
+	sb.WriteString(fmt.Sprintf("%s\n\n", c.Description))
+
+	if c.Finalized {
+		sb.WriteString("🏁 <b>Challenge selesai!</b>\n\n")
+	}
+
+	if len(standings) == 0 {
+		sb.WriteString("Belum ada peserta minggu ini.")
+		return sb.String()
+	}
+
+	medals := []string{"🥇", "🥈", "🥉"}
+	for i, s := range standings {
+		rank := fmt.Sprintf("%d.", i+1)
+		if i < 3 {
+			rank = medals[i]
+		}
+		name := s.Username
+		if name == "" {
+			name = fmt.Sprintf("user_%d", s.TelegramID)
+		}
+
+		var valueStr string
+		switch c.Type {
+		case domain.ChallengeMostTrades:
+			valueStr = fmt.Sprintf("%.0f trades", s.Value)
+		case domain.ChallengeBestRR, domain.ChallengeMostRR:
+			valueStr = fmt.Sprintf("%+.1fR", s.Value)
+		case domain.ChallengeHighestWR:
+			valueStr = fmt.Sprintf("%.1f%%", s.Value)
+		}
+
+		sb.WriteString(fmt.Sprintf("%s @%s — %s\n", rank, name, valueStr))
+	}
+
+	return sb.String()
+}
+
+// FormatChallengeResults formats the final results of a completed challenge.
+func FormatChallengeResults(c *domain.WeeklyChallenge, results []domain.ChallengeResult) string {
+	var sb strings.Builder
+	sb.WriteString("🏆 <b>Weekly Challenge Results!</b>\n")
+	sb.WriteString(fmt.Sprintf("📅 %s — <b>%s</b>\n\n", c.YearWeek, c.Title))
+
+	if len(results) == 0 {
+		sb.WriteString("Tidak ada peserta minggu ini.")
+		return sb.String()
+	}
+
+	medals := []string{"🥇", "🥈", "🥉"}
+	for i, r := range results {
+		if i >= 5 {
+			break
+		}
+		rank := fmt.Sprintf("%d.", i+1)
+		if i < 3 {
+			rank = medals[i]
+		}
+		name := r.Username
+		if name == "" {
+			name = fmt.Sprintf("user_%d", r.TelegramID)
+		}
+		sb.WriteString(fmt.Sprintf("%s @%s — %.1f\n", rank, name, r.Value))
+	}
+
+	sb.WriteString("\nSelamat kepada para pemenang! 🎉")
 	return sb.String()
 }
