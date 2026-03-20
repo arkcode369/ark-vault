@@ -320,9 +320,9 @@ func (h *Handler) cmdReport(ctx context.Context, msg *Message) {
 	h.sender.SendHTML(ctx, msg.Chat.ID, FormatWeeklySummary(summary))
 }
 
-// SendScheduledReport sends the weekly report to a specific chat.
+// SendScheduledReport sends the weekly report to a specific chat and optional topic thread.
 // Called by the scheduler.
-func (h *Handler) SendScheduledReport(ctx context.Context, chatID int64) error {
+func (h *Handler) SendScheduledReport(ctx context.Context, chatID int64, threadID int) error {
 	now := time.Now().UTC()
 	weekStart := timeutil.StartOfWeek(now, time.UTC)
 	weekEnd := weekStart.AddDate(0, 0, 7)
@@ -332,7 +332,7 @@ func (h *Handler) SendScheduledReport(ctx context.Context, chatID int64) error {
 		return err
 	}
 
-	_, err = h.sender.SendHTML(ctx, chatID, FormatWeeklySummary(summary))
+	_, err = h.sender.SendHTMLToThread(ctx, chatID, threadID, FormatWeeklySummary(summary))
 	return err
 }
 

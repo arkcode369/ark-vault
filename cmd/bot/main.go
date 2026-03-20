@@ -80,8 +80,8 @@ func main() {
 				dayMatch := isDayOfWeek(now, cfg.ReportDay)
 				hourMatch := now.Hour() == cfg.ReportHour
 				if dayMatch && hourMatch {
-					logger.Info("posting scheduled weekly report", "chat_id", cfg.ReportChatID)
-					return handler.SendScheduledReport(ctx, cfg.ReportChatID)
+					logger.Info("posting scheduled weekly report", "chat_id", cfg.ReportChatID, "thread_id", cfg.ReportThreadID)
+					return handler.SendScheduledReport(ctx, cfg.ReportChatID, cfg.ReportThreadID)
 				}
 				return nil
 			},

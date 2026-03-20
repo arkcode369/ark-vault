@@ -17,6 +17,7 @@ type Config struct {
 
 	// Report settings
 	ReportChatID    int64  // Group chat ID to post weekly reports to
+	ReportThreadID  int    // Topic/thread ID for groups with Topics enabled (0 = General)
 	ReportDay       string // Day of week: "monday", "sunday", etc. Default: "sunday"
 	ReportHour      int    // Hour (0-23) to post report. Default: 20
 
@@ -57,6 +58,14 @@ func Load() (*Config, error) {
 			return nil, errors.New("REPORT_CHAT_ID must be a valid integer")
 		}
 		c.ReportChatID = id
+	}
+
+	if threadStr := os.Getenv("REPORT_THREAD_ID"); threadStr != "" {
+		tid, err := strconv.Atoi(strings.TrimSpace(threadStr))
+		if err != nil {
+			return nil, errors.New("REPORT_THREAD_ID must be a valid integer")
+		}
+		c.ReportThreadID = tid
 	}
 
 	if hourStr := os.Getenv("REPORT_HOUR"); hourStr != "" {

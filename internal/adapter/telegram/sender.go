@@ -100,6 +100,24 @@ func (s *Sender) SendHTML(ctx context.Context, chatID int64, html string) (int, 
 	return extractMsgID(raw)
 }
 
+// SendHTMLToThread sends an HTML-formatted message to a specific topic/thread.
+// If threadID is 0, behaves like SendHTML (sends to General / main chat).
+func (s *Sender) SendHTMLToThread(ctx context.Context, chatID int64, threadID int, html string) (int, error) {
+	payload := map[string]interface{}{
+		"chat_id":    chatID,
+		"text":       html,
+		"parse_mode": "HTML",
+	}
+	if threadID > 0 {
+		payload["message_thread_id"] = threadID
+	}
+	raw, err := s.call(ctx, "sendMessage", payload)
+	if err != nil {
+		return 0, err
+	}
+	return extractMsgID(raw)
+}
+
 // SendWithKeyboard sends a message with inline keyboard.
 func (s *Sender) SendWithKeyboard(ctx context.Context, chatID int64, text string, rows [][]ports.InlineButton) (int, error) {
 	raw, err := s.call(ctx, "sendMessage", map[string]interface{}{
