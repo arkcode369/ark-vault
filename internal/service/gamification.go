@@ -62,7 +62,7 @@ func (s *GamificationService) OnTradeRecorded(ctx context.Context, memberID int6
 			TelegramID: memberID,
 			TotalXP:    0,
 			Level:      1,
-			Title:      "Pemula",
+			Title:      "Bronze V",
 		}
 	}
 
@@ -204,7 +204,7 @@ func (s *GamificationService) GetProfile(ctx context.Context, memberID int64) (*
 			TelegramID: memberID,
 			TotalXP:    0,
 			Level:      1,
-			Title:      "Pemula",
+			Title:      "Bronze V",
 			UpdatedAt:  time.Now().In(wib),
 		}
 	}

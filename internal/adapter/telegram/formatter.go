@@ -206,7 +206,7 @@ func FormatProfile(profile *domain.GamificationProfile, streak *domain.StreakDat
 	sb.WriteString("🏆 <b>Profil Trader</b>\n\n")
 
 	lvl := 1
-	title := "Pemula"
+	title := "Bronze V"
 	totalXP := 0
 	if profile != nil {
 		lvl = profile.Level
@@ -214,7 +214,7 @@ func FormatProfile(profile *domain.GamificationProfile, streak *domain.StreakDat
 		totalXP = profile.TotalXP
 		if lvl == 0 {
 			lvl = 1
-			title = "Pemula"
+			title = "Bronze V"
 		}
 	}
 

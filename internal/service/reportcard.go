@@ -140,13 +140,13 @@ func (s *ReportCardService) GenerateMonthlyReport(ctx context.Context, telegramI
 	}
 
 	level := 1
-	title := "Pemula"
+	title := "Bronze V"
 	if profile != nil {
 		level = profile.Level
 		title = profile.Title
 		if level == 0 {
 			level = 1
-			title = "Pemula"
+			title = "Bronze V"
 		}
 	}
 
