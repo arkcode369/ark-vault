@@ -68,8 +68,9 @@ func (h *Handler) SetBot(b *Bot) {
 
 // isAuthorized checks if the user is a member of the community group.
 // If communityGroupID is 0, everyone is authorized.
-// Returns true if authorized, false otherwise (and sends a denial message).
-func (h *Handler) isAuthorized(ctx context.Context, userID int64, chatID int64, threadID int) bool {
+// In group chats, non-members are silently ignored (no spam in group).
+// In private chats, non-members get a friendly denial with owner contact.
+func (h *Handler) isAuthorized(ctx context.Context, userID int64, chatID int64, threadID int, chatType string) bool {
 	if h.communityGroupID == 0 || h.bot == nil {
 		return true // no community gate configured
 	}
@@ -79,13 +80,16 @@ func (h *Handler) isAuthorized(ctx context.Context, userID int64, chatID int64, 
 		return true // fail open on API errors
 	}
 	if !isMember {
-		msg := "🔒 Fitur ini hanya tersedia untuk member komunitas."
-		if h.ownerID > 0 {
-			msg += fmt.Sprintf("\n\nUntuk bergabung, hubungi owner:\n➡ <a href=\"tg://user?id=%d\">Contact Owner</a>", h.ownerID)
-		} else {
-			msg += "\n\nHubungi admin komunitas untuk bergabung."
+		// Only send denial message in private chat — don't spam group chats
+		if chatType == "private" {
+			msg := "🔒 Fitur ini hanya tersedia untuk member komunitas."
+			if h.ownerID > 0 {
+				msg += fmt.Sprintf("\n\nUntuk bergabung, hubungi owner:\n➡ <a href=\"tg://user?id=%d\">Contact Owner</a>", h.ownerID)
+			} else {
+				msg += "\n\nHubungi admin komunitas untuk bergabung."
+			}
+			h.sender.SendHTML(ctx, chatID, msg, threadID)
 		}
-		h.sender.SendHTML(ctx, chatID, msg, threadID)
 		return false
 	}
 	return true
@@ -116,7 +120,7 @@ func (h *Handler) HandleUpdate(ctx context.Context, u Update) {
 	}
 
 	// Community membership gate
-	if msg.From != nil && !h.isAuthorized(ctx, msg.From.ID, msg.Chat.ID, msg.MessageThreadID) {
+	if msg.From != nil && !h.isAuthorized(ctx, msg.From.ID, msg.Chat.ID, msg.MessageThreadID, msg.Chat.Type) {
 		return
 	}
 
@@ -346,7 +350,7 @@ func (h *Handler) handleCallback(ctx context.Context, cb *CallbackQuery) {
 	h.sender.AnswerCallback(ctx, cb.ID, "")
 
 	// Community gate
-	if cb.Message != nil && !h.isAuthorized(ctx, cb.From.ID, cb.Message.Chat.ID, cb.Message.MessageThreadID) {
+	if cb.Message != nil && !h.isAuthorized(ctx, cb.From.ID, cb.Message.Chat.ID, cb.Message.MessageThreadID, cb.Message.Chat.Type) {
 		return
 	}
 
