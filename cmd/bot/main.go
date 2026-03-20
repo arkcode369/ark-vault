@@ -60,6 +60,12 @@ func main() {
 	badgeSvc := service.NewBadgeService(badgeRepo, tradeRepo, gamSvc)
 	challengeSvc := service.NewChallengeService(challengeRepo, tradeRepo, memberRepo, gamSvc, badgeSvc)
 
+	// Reminder & Goal services
+	reminderRepo := badgerdb.NewReminderRepo(store)
+	goalRepo := badgerdb.NewGoalRepo(store)
+	reminderSvc := service.NewReminderService(reminderRepo, gamRepo, logger)
+	goalSvc := service.NewGoalService(goalRepo, tradeRepo, gamSvc, badgeSvc)
+
 	// Exporter (CSV + PDF)
 	exp := exporter.NewExporter()
 
@@ -75,6 +81,8 @@ func main() {
 		Gamification: gamSvc,
 		Badge:        badgeSvc,
 		Challenge:    challengeSvc,
+		Reminder:     reminderSvc,
+		Goal:         goalSvc,
 	}
 	handler := telegram.NewHandler(
 		sender, svc, exp, tradeRepo, memberRepo, limiter, logger,
@@ -160,6 +168,27 @@ func main() {
 					text := fmt.Sprintf("⚔️ <b>New Weekly Challenge!</b>\n\n<b>%s</b>\n%s\n\nGunakan /challenge untuk melihat standings.", challenge.Title, challenge.Description)
 					sender.SendHTML(ctx, cfg.ReportChatID, text, cfg.ReportThreadID)
 				}
+			}
+			return nil
+		},
+	})
+
+	sched.Add(scheduler.Job{
+		Name:     "daily-reminder",
+		Interval: 1 * time.Hour,
+		Run: func(ctx context.Context) error {
+			dueReminders, err := reminderSvc.GetDueReminders(ctx)
+			if err != nil {
+				return err
+			}
+			for _, pref := range dueReminders {
+				streak, _ := gamSvc.GetStreak(ctx, pref.TelegramID)
+				streakDays := 0
+				if streak != nil {
+					streakDays = streak.CurrentStreak
+				}
+				text := telegram.FormatDailyReminder(streakDays)
+				sender.SendHTML(ctx, pref.ChatID, text, pref.ThreadID)
 			}
 			return nil
 		},

@@ -132,6 +132,8 @@ Confluence: FVG + OB mitigation on 15m</pre>
 • /profile — Profil & level gamifikasi
 • /badges — Koleksi badge
 • /challenge — Weekly challenge & standings
+• /reminder — Atur daily reminder
+• /goal — Monthly goal & progress
 • /help — Tampilkan pesan ini
 
 <b>Tips:</b>
@@ -373,5 +375,110 @@ func FormatChallengeResults(c *domain.WeeklyChallenge, results []domain.Challeng
 	}
 
 	sb.WriteString("\nSelamat kepada para pemenang! 🎉")
+	return sb.String()
+}
+
+// FormatReminderHelp shows reminder usage.
+func FormatReminderHelp() string {
+	return `🔔 <b>Daily Reminder</b>
+
+Gunakan:
+• <code>/reminder on</code> — Aktifkan (default jam 20:00 WIB)
+• <code>/reminder on 19</code> — Aktifkan jam 19:00 WIB
+• <code>/reminder off</code> — Nonaktifkan
+• <code>/reminder</code> — Cek status`
+}
+
+// FormatDailyReminder formats the daily reminder message sent to users.
+func FormatDailyReminder(streakDays int) string {
+	var sb strings.Builder
+	sb.WriteString("📝 <b>Reminder: Jangan lupa jurnal hari ini!</b>\n\n")
+	if streakDays > 0 {
+		sb.WriteString(fmt.Sprintf("🔥 Streak kamu: <b>%d hari</b>\n", streakDays))
+		sb.WriteString("Jangan sampai putus! Catat trade hari ini.\n")
+	} else {
+		sb.WriteString("Mulai streak baru dengan mencatat trade pertamamu hari ini.\n")
+	}
+	sb.WriteString("\nGunakan /journal untuk mulai.")
+	return sb.String()
+}
+
+// FormatGoalHelp shows goal usage.
+func FormatGoalHelp() string {
+	return `🎯 <b>Monthly Goal</b>
+
+Belum ada goal bulan ini. Set goal:
+• <code>/goal set total_trades 30</code> — Target 30 trade
+• <code>/goal set total_rr 10</code> — Target +10R
+• <code>/goal set win_rate 60</code> — Target 60% win rate
+• <code>/goal set streak_days 20</code> — Target 20 hari streak
+
+Cek progress: <code>/goal</code>`
+}
+
+// FormatGoalSet confirms a goal has been set.
+func FormatGoalSet(goal *domain.MonthlyGoal) string {
+	var typeLabel string
+	switch goal.GoalType {
+	case domain.GoalTotalTrades:
+		typeLabel = fmt.Sprintf("%.0f trades", goal.TargetValue)
+	case domain.GoalTotalRR:
+		typeLabel = fmt.Sprintf("+%.1fR", goal.TargetValue)
+	case domain.GoalWinRate:
+		typeLabel = fmt.Sprintf("%.0f%% win rate", goal.TargetValue)
+	case domain.GoalStreakDays:
+		typeLabel = fmt.Sprintf("%.0f hari streak", goal.TargetValue)
+	}
+	return fmt.Sprintf("🎯 <b>Goal bulan %s:</b> %s\n\nGunakan /goal untuk cek progress.", goal.YearMonth, typeLabel)
+}
+
+// FormatGoalProgress shows progress toward monthly goal.
+func FormatGoalProgress(p *domain.GoalProgress) string {
+	var sb strings.Builder
+	g := p.Goal
+	sb.WriteString(fmt.Sprintf("🎯 <b>Monthly Goal — %s</b>\n\n", g.YearMonth))
+
+	var typeLabel string
+	var currentStr, targetStr string
+	switch g.GoalType {
+	case domain.GoalTotalTrades:
+		typeLabel = "Total Trades"
+		currentStr = fmt.Sprintf("%.0f", p.CurrentValue)
+		targetStr = fmt.Sprintf("%.0f", g.TargetValue)
+	case domain.GoalTotalRR:
+		typeLabel = "Total RR"
+		currentStr = fmt.Sprintf("%+.1f", p.CurrentValue)
+		targetStr = fmt.Sprintf("+%.1f", g.TargetValue)
+	case domain.GoalWinRate:
+		typeLabel = "Win Rate"
+		currentStr = fmt.Sprintf("%.1f%%", p.CurrentValue)
+		targetStr = fmt.Sprintf("%.0f%%", g.TargetValue)
+	case domain.GoalStreakDays:
+		typeLabel = "Streak Days"
+		currentStr = fmt.Sprintf("%.0f", p.CurrentValue)
+		targetStr = fmt.Sprintf("%.0f", g.TargetValue)
+	}
+
+	sb.WriteString(fmt.Sprintf("<b>%s:</b> %s / %s\n", typeLabel, currentStr, targetStr))
+
+	// Progress bar
+	pct := p.Percentage
+	if pct > 100 {
+		pct = 100
+	}
+	filled := int(pct) * 16 / 100
+	if filled < 0 {
+		filled = 0
+	}
+	if filled > 16 {
+		filled = 16
+	}
+	bar := strings.Repeat("█", filled) + strings.Repeat("░", 16-filled)
+	sb.WriteString(fmt.Sprintf("[%s] %.0f%%\n", bar, p.Percentage))
+
+	if g.Achieved {
+		sb.WriteString("\n✅ <b>Goal tercapai!</b> 🎉")
+	}
+
 	return sb.String()
 }

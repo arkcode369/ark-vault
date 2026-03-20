@@ -32,3 +32,17 @@ type ChallengeStore interface {
 	SaveChallengeEntry(ctx context.Context, entry *domain.ChallengeEntry) error
 	GetChallengeEntries(ctx context.Context, yearWeek string) ([]domain.ChallengeEntry, error)
 }
+
+// ReminderStore provides storage for reminder preferences.
+type ReminderStore interface {
+	GetReminderPref(ctx context.Context, telegramID int64) (*domain.ReminderPreference, error)
+	SaveReminderPref(ctx context.Context, pref *domain.ReminderPreference) error
+	ListEnabledReminders(ctx context.Context) ([]domain.ReminderPreference, error)
+}
+
+// GoalStore provides storage for monthly goals.
+type GoalStore interface {
+	GetGoal(ctx context.Context, telegramID int64, yearMonth string) (*domain.MonthlyGoal, error)
+	SaveGoal(ctx context.Context, goal *domain.MonthlyGoal) error
+	ListActiveGoals(ctx context.Context, yearMonth string) ([]domain.MonthlyGoal, error)
+}

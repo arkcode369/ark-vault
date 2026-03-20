@@ -126,6 +126,32 @@ func (s *BadgeService) GetBadges(ctx context.Context, memberID int64) ([]domain.
 	return s.store.GetBadges(ctx, memberID)
 }
 
+// AwardGoalBadge awards the goal_achiever badge to a member.
+// Returns the award if newly granted, or nil if already earned.
+func (s *BadgeService) AwardGoalBadge(ctx context.Context, memberID int64) (*domain.BadgeAward, error) {
+	has, err := s.store.HasBadge(ctx, memberID, domain.BadgeGoalAchiever)
+	if err != nil {
+		return nil, err
+	}
+	if has {
+		return nil, nil
+	}
+
+	now := time.Now().In(wib)
+	award := &domain.BadgeAward{
+		TelegramID: memberID,
+		BadgeID:    domain.BadgeGoalAchiever,
+		AwardedAt:  now,
+	}
+	if err := s.store.AwardBadge(ctx, award); err != nil {
+		return nil, err
+	}
+	if _, err := s.gamSvc.AwardXP(ctx, memberID, domain.XPBadgeEarned, "badge:goal_achiever"); err != nil {
+		return nil, err
+	}
+	return award, nil
+}
+
 // AwardChallengeBadge awards the challenge_winner badge to a member.
 // Returns the award if newly granted, or nil if already earned.
 func (s *BadgeService) AwardChallengeBadge(ctx context.Context, memberID int64) (*domain.BadgeAward, error) {

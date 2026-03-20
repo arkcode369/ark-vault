@@ -22,6 +22,8 @@ type Services struct {
 	Gamification *service.GamificationService
 	Badge        *service.BadgeService
 	Challenge    *service.ChallengeService
+	Reminder     *service.ReminderService
+	Goal         *service.GoalService
 }
 
 // Handler routes incoming Telegram updates to the appropriate logic.
@@ -162,6 +164,10 @@ func (h *Handler) HandleUpdate(ctx context.Context, u Update) {
 		h.cmdBadges(ctx, msg)
 	case strings.HasPrefix(text, "/challenge"):
 		h.cmdChallenge(ctx, msg)
+	case strings.HasPrefix(text, "/reminder"):
+		h.cmdReminder(ctx, msg, text)
+	case strings.HasPrefix(text, "/goal"):
+		h.cmdGoal(ctx, msg, text)
 	case strings.HasPrefix(text, "#journal"):
 		h.handleTextJournal(ctx, msg, text)
 	}
@@ -204,6 +210,13 @@ func (h *Handler) handleTextJournal(ctx context.Context, msg *Message, text stri
 				newBadges, _ := h.svc.Badge.CheckAndAwardBadges(ctx, msg.From.ID, trade, streak)
 				if len(newBadges) > 0 {
 					h.sender.SendHTML(ctx, msg.Chat.ID, FormatBadgeUnlock(newBadges), msg.MessageThreadID)
+				}
+			}
+			// Check goal completion
+			if h.svc.Goal != nil {
+				achieved, _ := h.svc.Goal.CheckGoalCompletion(ctx, msg.From.ID)
+				if achieved {
+					h.sender.SendHTML(ctx, msg.Chat.ID, "\xf0\x9f\x8e\xaf <b>Monthly Goal Achieved!</b>\n\nSelamat! Kamu telah mencapai target bulananmu. +75 XP!", msg.MessageThreadID)
 				}
 			}
 			return
@@ -583,6 +596,13 @@ func (h *Handler) submitGuidedTrade(ctx context.Context, from *User, session *Gu
 					h.sender.SendHTML(ctx, session.ChatID, FormatBadgeUnlock(newBadges), session.ThreadID)
 				}
 			}
+			// Check goal completion
+			if h.svc.Goal != nil {
+				achieved, _ := h.svc.Goal.CheckGoalCompletion(ctx, from.ID)
+				if achieved {
+					h.sender.SendHTML(ctx, session.ChatID, "\xf0\x9f\x8e\xaf <b>Monthly Goal Achieved!</b>\n\nSelamat! Kamu telah mencapai target bulananmu. +75 XP!", session.ThreadID)
+				}
+			}
 			h.guided.Remove(from.ID)
 			return
 		}
@@ -657,4 +677,96 @@ func (h *Handler) cmdChallenge(ctx context.Context, msg *Message) {
 		return
 	}
 	h.sender.SendHTML(ctx, msg.Chat.ID, FormatChallenge(challenge, standings), msg.MessageThreadID)
+}
+
+// cmdReminder handles /reminder on, /reminder off, /reminder (show status)
+func (h *Handler) cmdReminder(ctx context.Context, msg *Message, text string) {
+	if msg.From == nil || h.svc.Reminder == nil {
+		return
+	}
+	parts := strings.Fields(text)
+
+	if len(parts) >= 2 {
+		switch strings.ToLower(parts[1]) {
+		case "on":
+			hourVal := 20 // default 8 PM WIB
+			if len(parts) >= 3 {
+				parsed, err := strconv.Atoi(parts[2])
+				if err == nil && parsed >= 0 && parsed <= 23 {
+					hourVal = parsed
+				}
+			}
+			err := h.svc.Reminder.SetReminder(ctx, msg.From.ID, msg.Chat.ID, msg.MessageThreadID, true, hourVal)
+			if err != nil {
+				h.sender.SendText(ctx, msg.Chat.ID, "❌ Gagal mengatur reminder.", msg.MessageThreadID)
+				return
+			}
+			h.sender.SendHTML(ctx, msg.Chat.ID, fmt.Sprintf("🔔 Daily reminder diaktifkan jam <b>%02d:00 WIB</b>", hourVal), msg.MessageThreadID)
+		case "off":
+			err := h.svc.Reminder.SetReminder(ctx, msg.From.ID, msg.Chat.ID, msg.MessageThreadID, false, 0)
+			if err != nil {
+				h.sender.SendText(ctx, msg.Chat.ID, "❌ Gagal mengatur reminder.", msg.MessageThreadID)
+				return
+			}
+			h.sender.SendText(ctx, msg.Chat.ID, "🔕 Daily reminder dinonaktifkan.", msg.MessageThreadID)
+		default:
+			h.sender.SendHTML(ctx, msg.Chat.ID, FormatReminderHelp(), msg.MessageThreadID)
+		}
+		return
+	}
+
+	// Show current status
+	pref, err := h.svc.Reminder.GetReminder(ctx, msg.From.ID)
+	if err != nil || pref == nil || !pref.Enabled {
+		h.sender.SendHTML(ctx, msg.Chat.ID, "🔕 Daily reminder belum aktif.\n\nGunakan <code>/reminder on</code> untuk mengaktifkan.\nGunakan <code>/reminder on 19</code> untuk jam 19:00 WIB.", msg.MessageThreadID)
+		return
+	}
+	h.sender.SendHTML(ctx, msg.Chat.ID, fmt.Sprintf("🔔 Reminder aktif: <b>%02d:00 WIB</b>\n\nGunakan <code>/reminder off</code> untuk menonaktifkan.", pref.Hour), msg.MessageThreadID)
+}
+
+// cmdGoal handles /goal, /goal set <type> <target>
+func (h *Handler) cmdGoal(ctx context.Context, msg *Message, text string) {
+	if msg.From == nil || h.svc.Goal == nil {
+		return
+	}
+	parts := strings.Fields(text)
+
+	// /goal set trades 30
+	if len(parts) >= 4 && strings.ToLower(parts[1]) == "set" {
+		goalType := domain.GoalType(strings.ToLower(parts[2]))
+		target, err := strconv.ParseFloat(parts[3], 64)
+		if err != nil || target <= 0 {
+			h.sender.SendText(ctx, msg.Chat.ID, "❌ Target harus angka positif.", msg.MessageThreadID)
+			return
+		}
+
+		// Validate goal type
+		switch goalType {
+		case domain.GoalTotalTrades, domain.GoalTotalRR, domain.GoalWinRate, domain.GoalStreakDays:
+			// valid
+		default:
+			h.sender.SendHTML(ctx, msg.Chat.ID, FormatGoalHelp(), msg.MessageThreadID)
+			return
+		}
+
+		goal, err := h.svc.Goal.SetGoal(ctx, msg.From.ID, goalType, target)
+		if err != nil {
+			h.sender.SendText(ctx, msg.Chat.ID, "❌ Gagal menyimpan goal.", msg.MessageThreadID)
+			return
+		}
+		h.sender.SendHTML(ctx, msg.Chat.ID, FormatGoalSet(goal), msg.MessageThreadID)
+		return
+	}
+
+	// /goal — show progress
+	progress, err := h.svc.Goal.GetProgress(ctx, msg.From.ID)
+	if err != nil {
+		h.sender.SendText(ctx, msg.Chat.ID, "❌ Gagal memuat goal.", msg.MessageThreadID)
+		return
+	}
+	if progress == nil {
+		h.sender.SendHTML(ctx, msg.Chat.ID, FormatGoalHelp(), msg.MessageThreadID)
+		return
+	}
+	h.sender.SendHTML(ctx, msg.Chat.ID, FormatGoalProgress(progress), msg.MessageThreadID)
 }
