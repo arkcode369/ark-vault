@@ -76,34 +76,3 @@ func (s *JournalService) GetMemberStats(ctx context.Context, memberTgID int64) (
 	stats := domain.CalculateStats(trades)
 	return &stats, nil
 }
-
-// CloseTrade updates a trade with close price and result.
-func (s *JournalService) CloseTrade(ctx context.Context, tradeID string, closePrice float64, resultPips float64, status domain.TradeStatus) error {
-	trade, err := s.trades.GetTradeByID(ctx, tradeID)
-	if err != nil {
-		return fmt.Errorf("get trade: %w", err)
-	}
-	if trade.Status != domain.StatusOpen {
-		return fmt.Errorf("trade is already closed (status: %s)", trade.Status)
-	}
-	trade.ClosePrice = closePrice
-	trade.ResultPips = resultPips
-	trade.Status = status
-	if trade.StopLoss != 0 && trade.EntryPrice != 0 {
-		risk := abs(trade.EntryPrice - trade.StopLoss)
-		if risk > 0 {
-			trade.RRRatio = abs(resultPips) / risk
-			if status == domain.StatusLoss {
-				trade.RRRatio = -trade.RRRatio
-			}
-		}
-	}
-	return s.trades.UpdateTrade(ctx, trade)
-}
-
-func abs(f float64) float64 {
-	if f < 0 {
-		return -f
-	}
-	return f
-}

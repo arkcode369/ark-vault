@@ -17,9 +17,10 @@ const (
 	StepAssetType
 	StepSymbol
 	StepDirection
-	StepEntry
-	StepStopLoss
-	StepTakeProfit
+	StepResult
+	StepRRAmount
+	StepTimeWindow
+	StepConfluence
 	StepScreenshot
 	StepConfirm
 )
@@ -87,7 +88,7 @@ func (gf *GuidedFlow) Remove(userID int64) {
 func StepPrompt(s *GuidedSession) (string, [][]InlineBtn) {
 	switch s.Step {
 	case StepAssetType:
-		return "📊 <b>Step 1/7</b> — Pilih asset type:", [][]InlineBtn{
+		return "📊 <b>Step 1/9</b> — Pilih asset type:", [][]InlineBtn{
 			{
 				{Text: "Forex", Data: "asset:FOREX"},
 				{Text: "Gold", Data: "asset:GOLD"},
@@ -98,22 +99,45 @@ func StepPrompt(s *GuidedSession) (string, [][]InlineBtn) {
 			},
 		}
 	case StepSymbol:
-		return fmt.Sprintf("📊 <b>Step 2/7</b> — Masukkan pair/symbol:\n(Asset: %s)", s.Trade.AssetType.String()), nil
+		return fmt.Sprintf("📊 <b>Step 2/9</b> — Masukkan pair/symbol:\n(Asset: %s)", s.Trade.AssetType.String()), nil
 	case StepDirection:
-		return "📊 <b>Step 3/7</b> — Direction:", [][]InlineBtn{
+		return "📊 <b>Step 3/9</b> — Direction:", [][]InlineBtn{
 			{
 				{Text: "🟢 BUY", Data: "dir:BUY"},
 				{Text: "🔴 SELL", Data: "dir:SELL"},
 			},
 		}
-	case StepEntry:
-		return "📊 <b>Step 4/7</b> — Entry price:", nil
-	case StepStopLoss:
-		return "📊 <b>Step 5/7</b> — Stop Loss:", nil
-	case StepTakeProfit:
-		return "📊 <b>Step 6/7</b> — Take Profit:", nil
+	case StepResult:
+		return "📊 <b>Step 4/9</b> — Result:", [][]InlineBtn{
+			{
+				{Text: "✅ WIN", Data: "result:WIN"},
+				{Text: "❌ LOSS", Data: "result:LOSS"},
+			},
+			{
+				{Text: "➖ BE", Data: "result:BE"},
+				{Text: "⏳ OPEN", Data: "result:OPEN"},
+			},
+		}
+	case StepRRAmount:
+		return "📊 <b>Step 5/9</b> — Masukkan jumlah RR (contoh: 2, 1.5):", nil
+	case StepTimeWindow:
+		return "📊 <b>Step 6/9</b> — Time Window:", [][]InlineBtn{
+			{
+				{Text: "Asia", Data: "session:asia"},
+				{Text: "London", Data: "session:london"},
+			},
+			{
+				{Text: "NY AM", Data: "session:nyam"},
+				{Text: "NY PM", Data: "session:nypm"},
+			},
+			{
+				{Text: "⏭ Skip", Data: "session:skip"},
+			},
+		}
+	case StepConfluence:
+		return "📊 <b>Step 7/9</b> — Masukkan confluence (alasan entry, atau ketik 'skip'):", nil
 	case StepScreenshot:
-		return "📊 <b>Step 7/7</b> — Kirim screenshot trade (opsional):", [][]InlineBtn{
+		return "📊 <b>Step 8/9</b> — Kirim screenshot trade (opsional):", [][]InlineBtn{
 			{{Text: "⏭ Skip", Data: "screenshot:skip"}},
 		}
 	case StepConfirm:
@@ -141,10 +165,17 @@ func buildConfirmText(s *GuidedSession) string {
 	sb.WriteString(fmt.Sprintf("Asset: <b>%s</b>\n", t.AssetType.String()))
 	sb.WriteString(fmt.Sprintf("Symbol: <b>%s</b>\n", t.Symbol))
 	sb.WriteString(fmt.Sprintf("Direction: <b>%s</b>\n", t.Direction))
-	sb.WriteString(fmt.Sprintf("Entry: <b>%g</b>\n", t.EntryPrice))
-	sb.WriteString(fmt.Sprintf("SL: <b>%g</b>\n", t.StopLoss))
-	sb.WriteString(fmt.Sprintf("TP: <b>%g</b>\n", t.TakeProfit))
-	if s.PhotoURL != "" {
+	sb.WriteString(fmt.Sprintf("Status: <b>%s</b>\n", t.Status))
+	if t.Status == domain.StatusWin || t.Status == domain.StatusLoss {
+		sb.WriteString(fmt.Sprintf("Result RR: <b>%+.1fR</b>\n", t.ResultRR))
+	}
+	if t.TimeWindow != "" {
+		sb.WriteString(fmt.Sprintf("Session: <b>%s</b>\n", t.TimeWindow))
+	}
+	if t.Confluence != "" {
+		sb.WriteString(fmt.Sprintf("Confluence: <b>%s</b>\n", t.Confluence))
+	}
+	if s.PhotoURL != "" || s.PhotoFileID != "" {
 		sb.WriteString("Screenshot: ✅ attached\n")
 	}
 	sb.WriteString("\nKirim submit untuk menyimpan.")

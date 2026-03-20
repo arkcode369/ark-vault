@@ -8,10 +8,10 @@ type Stats struct {
 	BreakEvens  int
 	OpenTrades  int
 	WinRate     float64 // percentage 0-100
-	TotalPips   float64
+	TotalRR     float64
 	AvgRR       float64
-	BestPips    float64
-	WorstPips   float64
+	BestRR      float64
+	WorstRR     float64
 	CurStreak   int // positive = win streak, negative = loss streak
 	MaxWinStrk  int
 	ByAsset     map[AssetType]AssetStats
@@ -22,7 +22,7 @@ type AssetStats struct {
 	Total   int
 	Wins    int
 	Losses  int
-	Pips    float64
+	TotalRR float64
 	WinRate float64
 }
 
@@ -45,8 +45,8 @@ func CalculateStats(trades []Trade) Stats {
 		case StatusWin:
 			s.Wins++
 			as.Wins++
-			as.Pips += t.ResultPips
-			s.TotalPips += t.ResultPips
+			as.TotalRR += t.ResultRR
+			s.TotalRR += t.ResultRR
 			if curStreak > 0 {
 				curStreak++
 			} else {
@@ -58,8 +58,8 @@ func CalculateStats(trades []Trade) Stats {
 		case StatusLoss:
 			s.Losses++
 			as.Losses++
-			as.Pips += t.ResultPips // negative value
-			s.TotalPips += t.ResultPips
+			as.TotalRR += t.ResultRR // negative value
+			s.TotalRR += t.ResultRR
 			if curStreak < 0 {
 				curStreak--
 			} else {
@@ -72,16 +72,16 @@ func CalculateStats(trades []Trade) Stats {
 			s.OpenTrades++
 		}
 
-		if t.RRRatio != 0 {
-			rrSum += t.RRRatio
+		if t.ResultRR != 0 {
+			rrSum += t.ResultRR
 			rrCount++
 		}
 
-		if t.ResultPips > s.BestPips {
-			s.BestPips = t.ResultPips
+		if t.ResultRR > s.BestRR {
+			s.BestRR = t.ResultRR
 		}
-		if t.ResultPips < s.WorstPips {
-			s.WorstPips = t.ResultPips
+		if t.ResultRR < s.WorstRR {
+			s.WorstRR = t.ResultRR
 		}
 
 		// Update per-asset win rate

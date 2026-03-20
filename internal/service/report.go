@@ -16,7 +16,7 @@ type WeeklySummary struct {
 	TotalTrades  int
 	TotalMembers int
 	CommunityWR  float64
-	TotalPips    float64
+	TotalRR      float64
 	MostTraded   string // most popular symbol
 	TopPerformers []LeaderboardEntry
 }
@@ -70,7 +70,7 @@ func (s *ReportService) GenerateWeeklySummary(ctx context.Context, weekStart, we
 		summary.TotalMembers++
 		stats := domain.CalculateStats(weekTrades)
 		summary.TotalTrades += stats.TotalTrades
-		summary.TotalPips += stats.TotalPips
+		summary.TotalRR += stats.TotalRR
 		allWins += stats.Wins
 		allClosed += stats.Wins + stats.Losses
 
@@ -79,7 +79,7 @@ func (s *ReportService) GenerateWeeklySummary(ctx context.Context, weekStart, we
 			FirstName:   m.FirstName,
 			TelegramID:  m.TelegramID,
 			WinRate:     stats.WinRate,
-			TotalPips:   stats.TotalPips,
+			TotalRR:     stats.TotalRR,
 			TotalTrades: stats.TotalTrades,
 		})
 	}
@@ -97,15 +97,15 @@ func (s *ReportService) GenerateWeeklySummary(ctx context.Context, weekStart, we
 		}
 	}
 
-	// Top 3 by pips
+	// Top 3 by RR
 	topN := 3
 	if len(entries) < topN {
 		topN = len(entries)
 	}
-	// Simple sort by pips
+	// Simple sort by RR
 	for i := 0; i < topN; i++ {
 		for j := i + 1; j < len(entries); j++ {
-			if entries[j].TotalPips > entries[i].TotalPips {
+			if entries[j].TotalRR > entries[i].TotalRR {
 				entries[i], entries[j] = entries[j], entries[i]
 			}
 		}

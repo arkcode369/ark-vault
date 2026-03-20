@@ -100,8 +100,6 @@ func (h *Handler) HandleUpdate(ctx context.Context, u Update) {
 		h.cmdStats(ctx, msg, text)
 	case strings.HasPrefix(text, "/leaderboard"):
 		h.cmdLeaderboard(ctx, msg, text)
-	case strings.HasPrefix(text, "/close"):
-		h.cmdClose(ctx, msg, text)
 	case strings.HasPrefix(text, "/export"):
 		h.cmdExport(ctx, msg, text)
 	case strings.HasPrefix(text, "/report"):
@@ -173,7 +171,7 @@ func (h *Handler) cmdStats(ctx context.Context, msg *Message, text string) {
 		lookupUsername := strings.TrimPrefix(parts[1], "@")
 		member, err := h.findMemberByUsername(ctx, lookupUsername)
 		if err != nil || member == nil {
-			h.sender.SendText(ctx, msg.Chat.ID, fmt.Sprintf("❌ Member @%s tidak ditemukan. Pastikan mereka sudah pernah mencatat trade.", lookupUsername))
+			h.sender.SendText(ctx, msg.Chat.ID, fmt.Sprintf("📭 Member @%s belum pernah mencatat trade.", lookupUsername))
 			return
 		}
 		targetID = member.TelegramID
@@ -182,7 +180,7 @@ func (h *Handler) cmdStats(ctx context.Context, msg *Message, text string) {
 
 	stats, err := h.journal.GetMemberStats(ctx, targetID)
 	if err != nil {
-		h.sender.SendText(ctx, msg.Chat.ID, "❌ Error: "+err.Error())
+		h.sender.SendText(ctx, msg.Chat.ID, "📭 Belum ada trade yang tercatat.")
 		return
 	}
 	if stats == nil {
@@ -210,8 +208,8 @@ func (h *Handler) findMemberByUsername(ctx context.Context, username string) (*d
 // cmdLeaderboard shows the leaderboard.
 func (h *Handler) cmdLeaderboard(ctx context.Context, msg *Message, text string) {
 	metric := "winrate"
-	if strings.Contains(strings.ToLower(text), "pips") {
-		metric = "pips"
+	if strings.Contains(strings.ToLower(text), "rr") {
+		metric = "rr"
 	}
 
 	entries, err := h.leaderboard.GetLeaderboard(ctx, metric, 10, 5)
@@ -223,35 +221,6 @@ func (h *Handler) cmdLeaderboard(ctx context.Context, msg *Message, text string)
 	h.sender.SendHTML(ctx, msg.Chat.ID, FormatLeaderboard(entries, metric))
 }
 
-// cmdClose handles /close <trade_id> <close_price> <pips> <status>
-func (h *Handler) cmdClose(ctx context.Context, msg *Message, text string) {
-	parts := strings.Fields(text)
-	if len(parts) < 5 {
-		h.sender.SendHTML(ctx, msg.Chat.ID,
-			"Format: <code>/close [trade_id] [close_price] [pips] [WIN/LOSS/BE]</code>")
-		return
-	}
-
-	tradeID := parts[1]
-	closePrice, err := strconv.ParseFloat(parts[2], 64)
-	if err != nil {
-		h.sender.SendText(ctx, msg.Chat.ID, "❌ Close price tidak valid")
-		return
-	}
-	pips, err := strconv.ParseFloat(parts[3], 64)
-	if err != nil {
-		h.sender.SendText(ctx, msg.Chat.ID, "❌ Pips tidak valid")
-		return
-	}
-	status := domain.TradeStatus(strings.ToUpper(parts[4]))
-
-	if err := h.journal.CloseTrade(ctx, tradeID, closePrice, pips, status); err != nil {
-		h.sender.SendText(ctx, msg.Chat.ID, "❌ "+err.Error())
-		return
-	}
-	h.sender.SendText(ctx, msg.Chat.ID, "✅ Trade berhasil ditutup!")
-}
-
 // cmdExport exports the member's trades as CSV or PDF.
 func (h *Handler) cmdExport(ctx context.Context, msg *Message, text string) {
 	if msg.From == nil {
@@ -259,7 +228,7 @@ func (h *Handler) cmdExport(ctx context.Context, msg *Message, text string) {
 	}
 	trades, err := h.trades.GetTrades(ctx, msg.From.ID)
 	if err != nil {
-		h.sender.SendText(ctx, msg.Chat.ID, "❌ "+err.Error())
+		h.sender.SendText(ctx, msg.Chat.ID, "📭 Belum ada trade untuk di-export.")
 		return
 	}
 	if len(trades) == 0 {
@@ -356,7 +325,41 @@ func (h *Handler) handleCallback(ctx context.Context, cb *CallbackQuery) {
 	case strings.HasPrefix(data, "dir:"):
 		dirStr := strings.TrimPrefix(data, "dir:")
 		session.Trade.Direction = domain.Direction(dirStr)
-		session.Step = StepEntry
+		session.Step = StepResult
+
+	case strings.HasPrefix(data, "result:"):
+		resultStr := strings.TrimPrefix(data, "result:")
+		switch resultStr {
+		case "WIN":
+			session.Trade.Status = domain.StatusWin
+			session.Step = StepRRAmount
+		case "LOSS":
+			session.Trade.Status = domain.StatusLoss
+			session.Step = StepRRAmount
+		case "BE":
+			session.Trade.Status = domain.StatusBE
+			session.Trade.ResultRR = 0
+			session.Step = StepTimeWindow
+		case "OPEN":
+			session.Trade.Status = domain.StatusOpen
+			session.Step = StepTimeWindow
+		}
+
+	case strings.HasPrefix(data, "session:"):
+		sessionStr := strings.TrimPrefix(data, "session:")
+		switch sessionStr {
+		case "asia":
+			session.Trade.TimeWindow = domain.SessionAsia
+		case "london":
+			session.Trade.TimeWindow = domain.SessionLondon
+		case "nyam":
+			session.Trade.TimeWindow = domain.SessionNYAM
+		case "nypm":
+			session.Trade.TimeWindow = domain.SessionNYPM
+		case "skip":
+			// leave empty
+		}
+		session.Step = StepConfluence
 
 	case data == "screenshot:skip":
 		session.Step = StepConfirm
@@ -395,31 +398,29 @@ func (h *Handler) handleGuidedInput(ctx context.Context, msg *Message, session *
 		session.Trade.Symbol = strings.ToUpper(strings.ReplaceAll(text, "/", ""))
 		session.Step = StepDirection
 
-	case StepEntry:
+	case StepRRAmount:
 		v, err := strconv.ParseFloat(text, 64)
 		if err != nil {
-			h.sender.SendText(ctx, msg.Chat.ID, "❌ Masukkan angka yang valid untuk entry price.")
+			h.sender.SendText(ctx, msg.Chat.ID, "❌ Masukkan angka yang valid untuk RR (contoh: 2, 1.5).")
 			return
 		}
-		session.Trade.EntryPrice = v
-		session.Step = StepStopLoss
+		if session.Trade.Status == domain.StatusWin {
+			if v < 0 {
+				v = -v
+			}
+			session.Trade.ResultRR = v
+		} else if session.Trade.Status == domain.StatusLoss {
+			if v > 0 {
+				v = -v
+			}
+			session.Trade.ResultRR = v
+		}
+		session.Step = StepTimeWindow
 
-	case StepStopLoss:
-		v, err := strconv.ParseFloat(text, 64)
-		if err != nil {
-			h.sender.SendText(ctx, msg.Chat.ID, "❌ Masukkan angka yang valid untuk stop loss.")
-			return
+	case StepConfluence:
+		if strings.ToLower(text) != "skip" {
+			session.Trade.Confluence = text
 		}
-		session.Trade.StopLoss = v
-		session.Step = StepTakeProfit
-
-	case StepTakeProfit:
-		v, err := strconv.ParseFloat(text, 64)
-		if err != nil {
-			h.sender.SendText(ctx, msg.Chat.ID, "❌ Masukkan angka yang valid untuk take profit.")
-			return
-		}
-		session.Trade.TakeProfit = v
 		session.Step = StepScreenshot
 
 	case StepScreenshot:
@@ -453,7 +454,9 @@ func (h *Handler) handleGuidedInput(ctx context.Context, msg *Message, session *
 // submitGuidedTrade finalises the guided flow and saves the trade.
 func (h *Handler) submitGuidedTrade(ctx context.Context, from *User, session *GuidedSession) {
 	trade := &session.Trade
-	trade.Status = domain.StatusOpen
+	if trade.Status == "" {
+		trade.Status = domain.StatusOpen
+	}
 
 	err := h.journal.RecordTrade(ctx, from.ID, from.Username, from.FirstName, trade)
 	if err != nil {

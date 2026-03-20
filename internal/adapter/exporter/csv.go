@@ -25,9 +25,8 @@ func (e *CSVExporter) ExportCSV(_ context.Context, trades []domain.Trade) ([]byt
 	// Header
 	header := []string{
 		"Date", "Asset Type", "Symbol", "Direction",
-		"Entry Price", "Stop Loss", "Take Profit",
-		"Close Price", "Result Pips", "RR Ratio",
-		"Status", "Notes",
+		"Status", "Result RR", "Time Window",
+		"Confluence", "Notes",
 	}
 	if err := w.Write(header); err != nil {
 		return nil, err
@@ -39,13 +38,10 @@ func (e *CSVExporter) ExportCSV(_ context.Context, trades []domain.Trade) ([]byt
 			t.AssetType.String(),
 			t.Symbol,
 			string(t.Direction),
-			fmt.Sprintf("%.5f", t.EntryPrice),
-			fmt.Sprintf("%.5f", t.StopLoss),
-			fmt.Sprintf("%.5f", t.TakeProfit),
-			fmt.Sprintf("%.5f", t.ClosePrice),
-			fmt.Sprintf("%.1f", t.ResultPips),
-			fmt.Sprintf("%.2f", t.RRRatio),
 			string(t.Status),
+			fmt.Sprintf("%.2f", t.ResultRR),
+			string(t.TimeWindow),
+			t.Confluence,
 			t.Notes,
 		}
 		if err := w.Write(row); err != nil {

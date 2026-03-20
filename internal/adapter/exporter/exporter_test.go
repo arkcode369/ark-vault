@@ -17,11 +17,10 @@ func TestCSVExport(t *testing.T) {
 			AssetType:  domain.AssetForex,
 			Symbol:     "EURUSD",
 			Direction:  domain.DirBuy,
-			EntryPrice: 1.085,
-			StopLoss:   1.08,
-			TakeProfit: 1.095,
-			ResultPips: 50,
+			ResultRR:   2.0,
 			Status:     domain.StatusWin,
+			TimeWindow: domain.SessionLondon,
+			Confluence: "FVG + OB",
 		},
 	}
 
@@ -40,6 +39,9 @@ func TestCSVExport(t *testing.T) {
 	if !bytes.Contains([]byte(csv), []byte("WIN")) {
 		t.Error("CSV should contain WIN")
 	}
+	if !bytes.Contains([]byte(csv), []byte("London")) {
+		t.Error("CSV should contain London")
+	}
 }
 
 func TestPDFExport(t *testing.T) {
@@ -50,20 +52,18 @@ func TestPDFExport(t *testing.T) {
 			AssetType:  domain.AssetForex,
 			Symbol:     "EURUSD",
 			Direction:  domain.DirBuy,
-			EntryPrice: 1.085,
-			StopLoss:   1.08,
-			TakeProfit: 1.095,
-			ResultPips: 50,
-			RRRatio:    2.0,
+			ResultRR:   2.0,
 			Status:     domain.StatusWin,
+			TimeWindow: domain.SessionLondon,
+			Confluence: "FVG + OB",
 		},
 	}
 	stats := &domain.Stats{
 		TotalTrades: 1,
 		Wins:        1,
 		WinRate:     100,
-		TotalPips:   50,
-		BestPips:    50,
+		TotalRR:     2.0,
+		BestRR:      2.0,
 		AvgRR:       2.0,
 	}
 

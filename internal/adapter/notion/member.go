@@ -206,24 +206,6 @@ func (r *MemberRepo) createTradeDatabase(ctx context.Context, parentPageID strin
 					},
 				},
 			},
-			"Entry Price": map[string]interface{}{
-				"number": map[string]interface{}{"format": "number"},
-			},
-			"Stop Loss": map[string]interface{}{
-				"number": map[string]interface{}{"format": "number"},
-			},
-			"Take Profit": map[string]interface{}{
-				"number": map[string]interface{}{"format": "number"},
-			},
-			"Close Price": map[string]interface{}{
-				"number": map[string]interface{}{"format": "number"},
-			},
-			"Result Pips": map[string]interface{}{
-				"number": map[string]interface{}{"format": "number"},
-			},
-			"RR Ratio": map[string]interface{}{
-				"number": map[string]interface{}{"format": "number"},
-			},
 			"Status": map[string]interface{}{
 				"select": map[string]interface{}{
 					"options": []map[string]interface{}{
@@ -233,6 +215,22 @@ func (r *MemberRepo) createTradeDatabase(ctx context.Context, parentPageID strin
 						{"name": "BE", "color": "gray"},
 					},
 				},
+			},
+			"Result RR": map[string]interface{}{
+				"number": map[string]interface{}{"format": "number"},
+			},
+			"Time Window": map[string]interface{}{
+				"select": map[string]interface{}{
+					"options": []map[string]interface{}{
+						{"name": "Asia", "color": "blue"},
+						{"name": "London", "color": "green"},
+						{"name": "NY AM", "color": "yellow"},
+						{"name": "NY PM", "color": "orange"},
+					},
+				},
+			},
+			"Confluence": map[string]interface{}{
+				"rich_text": map[string]interface{}{},
 			},
 			"Notes": map[string]interface{}{
 				"rich_text": map[string]interface{}{},

@@ -4,11 +4,11 @@ import "testing"
 
 func TestCalculateStats(t *testing.T) {
 	trades := []Trade{
-		{Status: StatusWin, ResultPips: 50, RRRatio: 2.0, AssetType: AssetForex},
-		{Status: StatusWin, ResultPips: 30, RRRatio: 1.5, AssetType: AssetForex},
-		{Status: StatusLoss, ResultPips: -25, RRRatio: -1.0, AssetType: AssetGold},
-		{Status: StatusWin, ResultPips: 80, RRRatio: 3.0, AssetType: AssetGold},
-		{Status: StatusBE, ResultPips: 0, AssetType: AssetForex},
+		{Status: StatusWin, ResultRR: 2.0, AssetType: AssetForex},
+		{Status: StatusWin, ResultRR: 1.5, AssetType: AssetForex},
+		{Status: StatusLoss, ResultRR: -1.0, AssetType: AssetGold},
+		{Status: StatusWin, ResultRR: 3.0, AssetType: AssetGold},
+		{Status: StatusBE, ResultRR: 0, AssetType: AssetForex},
 		{Status: StatusOpen, AssetType: AssetCrypto},
 	}
 
@@ -35,16 +35,16 @@ func TestCalculateStats(t *testing.T) {
 		t.Errorf("win rate: got %.1f, want 75.0", s.WinRate)
 	}
 
-	// Total pips: 50+30-25+80 = 135
-	if s.TotalPips != 135 {
-		t.Errorf("total pips: got %.1f, want 135", s.TotalPips)
+	// Total RR: 2.0+1.5-1.0+3.0 = 5.5
+	if s.TotalRR != 5.5 {
+		t.Errorf("total RR: got %.1f, want 5.5", s.TotalRR)
 	}
 
-	if s.BestPips != 80 {
-		t.Errorf("best: got %.1f, want 80", s.BestPips)
+	if s.BestRR != 3.0 {
+		t.Errorf("best: got %.1f, want 3.0", s.BestRR)
 	}
-	if s.WorstPips != -25 {
-		t.Errorf("worst: got %.1f, want -25", s.WorstPips)
+	if s.WorstRR != -1.0 {
+		t.Errorf("worst: got %.1f, want -1.0", s.WorstRR)
 	}
 }
 

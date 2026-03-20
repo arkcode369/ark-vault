@@ -15,7 +15,7 @@ type LeaderboardEntry struct {
 	FirstName  string
 	TelegramID int64
 	WinRate    float64
-	TotalPips  float64
+	TotalRR    float64
 	TotalTrades int
 }
 
@@ -31,7 +31,7 @@ func NewLeaderboardService(tr ports.TradeRepository, mr ports.MemberRepository) 
 }
 
 // GetLeaderboard returns top N members sorted by the given metric.
-// metric: "winrate" or "pips". minTrades is the minimum trade count to qualify.
+// metric: "winrate" or "rr". minTrades is the minimum trade count to qualify.
 func (s *LeaderboardService) GetLeaderboard(ctx context.Context, metric string, topN, minTrades int) ([]LeaderboardEntry, error) {
 	members, err := s.members.ListMembers(ctx)
 	if err != nil {
@@ -53,15 +53,15 @@ func (s *LeaderboardService) GetLeaderboard(ctx context.Context, metric string, 
 			FirstName:   m.FirstName,
 			TelegramID:  m.TelegramID,
 			WinRate:     stats.WinRate,
-			TotalPips:   stats.TotalPips,
+			TotalRR:     stats.TotalRR,
 			TotalTrades: stats.TotalTrades,
 		})
 	}
 
 	switch metric {
-	case "pips":
+	case "rr":
 		sort.Slice(entries, func(i, j int) bool {
-			return entries[i].TotalPips > entries[j].TotalPips
+			return entries[i].TotalRR > entries[j].TotalRR
 		})
 	default: // winrate
 		sort.Slice(entries, func(i, j int) bool {

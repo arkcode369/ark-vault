@@ -34,10 +34,10 @@ func (e *PDFExporter) ExportPDF(_ context.Context, username string, trades []dom
 		content.WriteString(fmt.Sprintf("Total Trades:    %d\n", stats.TotalTrades))
 		content.WriteString(fmt.Sprintf("Win/Loss/BE:     %d / %d / %d\n", stats.Wins, stats.Losses, stats.BreakEvens))
 		content.WriteString(fmt.Sprintf("Win Rate:        %.1f%%\n", stats.WinRate))
-		content.WriteString(fmt.Sprintf("Total Pips:      %+.1f\n", stats.TotalPips))
+		content.WriteString(fmt.Sprintf("Total RR:        %+.1fR\n", stats.TotalRR))
 		content.WriteString(fmt.Sprintf("Avg RR:          %.2f\n", stats.AvgRR))
-		content.WriteString(fmt.Sprintf("Best Trade:      %+.1f pips\n", stats.BestPips))
-		content.WriteString(fmt.Sprintf("Worst Trade:     %+.1f pips\n", stats.WorstPips))
+		content.WriteString(fmt.Sprintf("Best Trade:      %+.1fR\n", stats.BestRR))
+		content.WriteString(fmt.Sprintf("Worst Trade:     %+.1fR\n", stats.WorstRR))
 		content.WriteString(fmt.Sprintf("Max Win Streak:  %d\n\n", stats.MaxWinStrk))
 	}
 
@@ -46,15 +46,17 @@ func (e *PDFExporter) ExportPDF(_ context.Context, username string, trades []dom
 	content.WriteString(strings.Repeat("-", 30) + "\n")
 	for i, t := range trades {
 		content.WriteString(fmt.Sprintf("\n#%d  %s  %s %s\n", i+1, t.Date.Format("2006-01-02"), t.Symbol, t.Direction))
-		content.WriteString(fmt.Sprintf("    Entry: %g  SL: %g  TP: %g\n", t.EntryPrice, t.StopLoss, t.TakeProfit))
-		if t.ClosePrice != 0 {
-			content.WriteString(fmt.Sprintf("    Close: %g\n", t.ClosePrice))
-		}
 		content.WriteString(fmt.Sprintf("    Status: %s", t.Status))
-		if t.ResultPips != 0 {
-			content.WriteString(fmt.Sprintf("  Pips: %+.1f  RR: %.2f", t.ResultPips, t.RRRatio))
+		if t.ResultRR != 0 {
+			content.WriteString(fmt.Sprintf("  RR: %+.1fR", t.ResultRR))
 		}
 		content.WriteString("\n")
+		if t.TimeWindow != "" {
+			content.WriteString(fmt.Sprintf("    Session: %s\n", t.TimeWindow))
+		}
+		if t.Confluence != "" {
+			content.WriteString(fmt.Sprintf("    Confluence: %s\n", t.Confluence))
+		}
 	}
 
 	// Generate minimal valid PDF

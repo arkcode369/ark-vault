@@ -13,12 +13,6 @@ type TradeRepository interface {
 
 	// GetTrades returns all trades for a member, ordered by date descending.
 	GetTrades(ctx context.Context, memberID int64) ([]domain.Trade, error)
-
-	// GetTradeByID returns a single trade.
-	GetTradeByID(ctx context.Context, tradeID string) (*domain.Trade, error)
-
-	// UpdateTrade persists changes to an existing trade.
-	UpdateTrade(ctx context.Context, trade *domain.Trade) error
 }
 
 // MemberRepository defines persistence operations for members.

@@ -23,22 +23,29 @@ const (
 	StatusBE   TradeStatus = "BE" // break-even
 )
 
+// TimeWindow represents the trading session.
+type TimeWindow string
+
+const (
+	SessionAsia   TimeWindow = "Asia"
+	SessionLondon TimeWindow = "London"
+	SessionNYAM   TimeWindow = "NY AM"
+	SessionNYPM   TimeWindow = "NY PM"
+)
+
 // Trade is the core domain entity for a single trade journal entry.
 type Trade struct {
-	ID          string // Notion page ID of the trade entry
-	MemberID    int64  // Telegram user ID
-	Date        time.Time
-	AssetType   AssetType
-	Symbol      string
-	Direction   Direction
-	EntryPrice  float64
-	StopLoss    float64
-	TakeProfit  float64
-	ClosePrice  float64
-	ResultPips  float64
-	RRRatio     float64
-	Status      TradeStatus
-	Notes       string
+	ID            string // Notion page ID of the trade entry
+	MemberID      int64  // Telegram user ID
+	Date          time.Time
+	AssetType     AssetType
+	Symbol        string
+	Direction     Direction
+	ResultRR      float64    // R multiple result (e.g. +2, -1, 0 for BE)
+	Status        TradeStatus
+	TimeWindow    TimeWindow
+	Confluence    string
+	Notes         string
 	ScreenshotURL string // URL after uploaded to Notion
 }
 
@@ -49,15 +56,6 @@ func (t *Trade) Validate() error {
 	}
 	if t.Direction != DirBuy && t.Direction != DirSell {
 		return errors.New("direction must be BUY or SELL")
-	}
-	if t.EntryPrice <= 0 {
-		return errors.New("entry price must be positive")
-	}
-	if t.StopLoss <= 0 {
-		return errors.New("stop loss must be positive")
-	}
-	if t.TakeProfit <= 0 {
-		return errors.New("take profit must be positive")
 	}
 	return nil
 }

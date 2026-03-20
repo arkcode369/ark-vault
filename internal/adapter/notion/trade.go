@@ -76,25 +76,6 @@ func (r *TradeRepo) GetTrades(ctx context.Context, memberID int64) ([]domain.Tra
 	return r.parseTrades(raw)
 }
 
-// GetTradeByID fetches a single trade page from Notion.
-func (r *TradeRepo) GetTradeByID(ctx context.Context, tradeID string) (*domain.Trade, error) {
-	raw, err := r.client.GetPage(ctx, tradeID)
-	if err != nil {
-		return nil, fmt.Errorf("get trade page: %w", err)
-	}
-	return r.parseSingleTrade(raw)
-}
-
-// UpdateTrade patches a trade's properties.
-func (r *TradeRepo) UpdateTrade(ctx context.Context, trade *domain.Trade) error {
-	props := r.buildTradeProperties(trade)
-	payload := map[string]interface{}{
-		"properties": props,
-	}
-	_, err := r.client.UpdatePage(ctx, trade.ID, payload)
-	return err
-}
-
 // buildTradeProperties converts a Trade to Notion page properties.
 func (r *TradeRepo) buildTradeProperties(t *domain.Trade) map[string]interface{} {
 	props := map[string]interface{}{
@@ -109,15 +90,6 @@ func (r *TradeRepo) buildTradeProperties(t *domain.Trade) map[string]interface{}
 		"Asset Type": map[string]interface{}{
 			"select": map[string]interface{}{"name": t.AssetType.String()},
 		},
-		"Entry Price": map[string]interface{}{
-			"number": t.EntryPrice,
-		},
-		"Stop Loss": map[string]interface{}{
-			"number": t.StopLoss,
-		},
-		"Take Profit": map[string]interface{}{
-			"number": t.TakeProfit,
-		},
 		"Status": map[string]interface{}{
 			"select": map[string]interface{}{"name": string(t.Status)},
 		},
@@ -130,14 +102,20 @@ func (r *TradeRepo) buildTradeProperties(t *domain.Trade) map[string]interface{}
 			},
 		}
 	}
-	if t.ClosePrice != 0 {
-		props["Close Price"] = map[string]interface{}{"number": t.ClosePrice}
+	if t.ResultRR != 0 {
+		props["Result RR"] = map[string]interface{}{"number": t.ResultRR}
 	}
-	if t.ResultPips != 0 {
-		props["Result Pips"] = map[string]interface{}{"number": t.ResultPips}
+	if t.TimeWindow != "" {
+		props["Time Window"] = map[string]interface{}{
+			"select": map[string]interface{}{"name": string(t.TimeWindow)},
+		}
 	}
-	if t.RRRatio != 0 {
-		props["RR Ratio"] = map[string]interface{}{"number": t.RRRatio}
+	if t.Confluence != "" {
+		props["Confluence"] = map[string]interface{}{
+			"rich_text": []map[string]interface{}{
+				{"text": map[string]interface{}{"content": t.Confluence}},
+			},
+		}
 	}
 	if t.Notes != "" {
 		props["Notes"] = map[string]interface{}{
@@ -194,29 +172,24 @@ func (r *TradeRepo) parseSingleTrade(raw json.RawMessage) (*domain.Trade, error)
 					Name string `json:"name"`
 				} `json:"select"`
 			} `json:"Direction"`
-			EntryPrice struct {
+			ResultRR struct {
 				Number *float64 `json:"number"`
-			} `json:"Entry Price"`
-			StopLoss struct {
-				Number *float64 `json:"number"`
-			} `json:"Stop Loss"`
-			TakeProfit struct {
-				Number *float64 `json:"number"`
-			} `json:"Take Profit"`
-			ClosePrice struct {
-				Number *float64 `json:"number"`
-			} `json:"Close Price"`
-			ResultPips struct {
-				Number *float64 `json:"number"`
-			} `json:"Result Pips"`
-			RRRatio struct {
-				Number *float64 `json:"number"`
-			} `json:"RR Ratio"`
+			} `json:"Result RR"`
 			Status struct {
 				Select *struct {
 					Name string `json:"name"`
 				} `json:"select"`
 			} `json:"Status"`
+			TimeWindow struct {
+				Select *struct {
+					Name string `json:"name"`
+				} `json:"select"`
+			} `json:"Time Window"`
+			Confluence struct {
+				RichText []struct {
+					PlainText string `json:"plain_text"`
+				} `json:"rich_text"`
+			} `json:"Confluence"`
 			Notes struct {
 				RichText []struct {
 					PlainText string `json:"plain_text"`
@@ -246,26 +219,17 @@ func (r *TradeRepo) parseSingleTrade(raw json.RawMessage) (*domain.Trade, error)
 	if page.Properties.Direction.Select != nil {
 		t.Direction = domain.Direction(page.Properties.Direction.Select.Name)
 	}
-	if page.Properties.EntryPrice.Number != nil {
-		t.EntryPrice = *page.Properties.EntryPrice.Number
-	}
-	if page.Properties.StopLoss.Number != nil {
-		t.StopLoss = *page.Properties.StopLoss.Number
-	}
-	if page.Properties.TakeProfit.Number != nil {
-		t.TakeProfit = *page.Properties.TakeProfit.Number
-	}
-	if page.Properties.ClosePrice.Number != nil {
-		t.ClosePrice = *page.Properties.ClosePrice.Number
-	}
-	if page.Properties.ResultPips.Number != nil {
-		t.ResultPips = *page.Properties.ResultPips.Number
-	}
-	if page.Properties.RRRatio.Number != nil {
-		t.RRRatio = *page.Properties.RRRatio.Number
+	if page.Properties.ResultRR.Number != nil {
+		t.ResultRR = *page.Properties.ResultRR.Number
 	}
 	if page.Properties.Status.Select != nil {
 		t.Status = domain.TradeStatus(page.Properties.Status.Select.Name)
+	}
+	if page.Properties.TimeWindow.Select != nil {
+		t.TimeWindow = domain.TimeWindow(page.Properties.TimeWindow.Select.Name)
+	}
+	if len(page.Properties.Confluence.RichText) > 0 {
+		t.Confluence = page.Properties.Confluence.RichText[0].PlainText
 	}
 	if len(page.Properties.Notes.RichText) > 0 {
 		t.Notes = page.Properties.Notes.RichText[0].PlainText
