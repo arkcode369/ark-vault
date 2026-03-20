@@ -1,0 +1,83 @@
+package config
+
+import (
+	"errors"
+	"os"
+	"strconv"
+	"strings"
+)
+
+// Config holds all application configuration.
+type Config struct {
+	TelegramToken  string
+	NotionToken    string
+	NotionParentID string // The parent page ID under which member pages are created
+	BotUsername     string
+	LogLevel       string
+
+	// Report settings
+	ReportChatID    int64  // Group chat ID to post weekly reports to
+	ReportDay       string // Day of week: "monday", "sunday", etc. Default: "sunday"
+	ReportHour      int    // Hour (0-23) to post report. Default: 20
+
+	// Rate limiting
+	RateLimitPerMin int // Max commands per user per minute. Default: 10
+}
+
+// Load reads configuration from environment variables.
+func Load() (*Config, error) {
+	c := &Config{
+		TelegramToken:  strings.TrimSpace(os.Getenv("TELEGRAM_BOT_TOKEN")),
+		NotionToken:    strings.TrimSpace(os.Getenv("NOTION_TOKEN")),
+		NotionParentID: strings.TrimSpace(os.Getenv("NOTION_PARENT_PAGE_ID")),
+		BotUsername:    strings.TrimSpace(os.Getenv("BOT_USERNAME")),
+		LogLevel:       strings.TrimSpace(os.Getenv("LOG_LEVEL")),
+		ReportDay:      strings.TrimSpace(os.Getenv("REPORT_DAY")),
+	}
+
+	if c.TelegramToken == "" {
+		return nil, errors.New("TELEGRAM_BOT_TOKEN is required")
+	}
+	if c.NotionToken == "" {
+		return nil, errors.New("NOTION_TOKEN is required")
+	}
+	if c.NotionParentID == "" {
+		return nil, errors.New("NOTION_PARENT_PAGE_ID is required")
+	}
+	if c.LogLevel == "" {
+		c.LogLevel = "info"
+	}
+	if c.ReportDay == "" {
+		c.ReportDay = "sunday"
+	}
+
+	if chatStr := os.Getenv("REPORT_CHAT_ID"); chatStr != "" {
+		id, err := strconv.ParseInt(strings.TrimSpace(chatStr), 10, 64)
+		if err != nil {
+			return nil, errors.New("REPORT_CHAT_ID must be a valid integer")
+		}
+		c.ReportChatID = id
+	}
+
+	if hourStr := os.Getenv("REPORT_HOUR"); hourStr != "" {
+		h, err := strconv.Atoi(strings.TrimSpace(hourStr))
+		if err != nil || h < 0 || h > 23 {
+			return nil, errors.New("REPORT_HOUR must be 0-23")
+		}
+		c.ReportHour = h
+	} else {
+		c.ReportHour = 20
+	}
+
+	if rlStr := os.Getenv("RATE_LIMIT_PER_MIN"); rlStr != "" {
+		rl, err := strconv.Atoi(strings.TrimSpace(rlStr))
+		if err != nil || rl < 1 {
+			return nil, errors.New("RATE_LIMIT_PER_MIN must be a positive integer")
+		}
+		c.RateLimitPerMin = rl
+	} else {
+		c.RateLimitPerMin = 10
+	}
+
+	return c, nil
+}
