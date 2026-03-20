@@ -34,6 +34,7 @@ type GuidedSession struct {
 	MsgID       int // last bot message ID, for editing
 	PhotoURL    string
 	PhotoFileID string
+	Submitting  bool // prevents double submit
 	ExpiresAt   time.Time
 }
 

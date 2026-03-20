@@ -52,6 +52,7 @@ func main() {
 	handler := telegram.NewHandler(
 		sender, journalSvc, leaderboardSvc, reportSvc,
 		exp, tradeRepo, memberRepo, limiter, logger,
+		cfg.CommunityGroupID, cfg.OwnerID,
 	)
 	bot := telegram.NewBot(cfg.TelegramToken, handler, logger)
 	handler.SetBot(bot)

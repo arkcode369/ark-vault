@@ -16,17 +16,19 @@ import (
 
 // Handler routes incoming Telegram updates to the appropriate logic.
 type Handler struct {
-	sender      *Sender
-	bot         *Bot
-	journal     *service.JournalService
-	leaderboard *service.LeaderboardService
-	report      *service.ReportService
-	exporter    ports.Exporter
-	trades      ports.TradeRepository
-	members     ports.MemberRepository
-	guided      *GuidedFlow
-	limiter     *RateLimiter
-	logger      *slog.Logger
+	sender           *Sender
+	bot              *Bot
+	journal          *service.JournalService
+	leaderboard      *service.LeaderboardService
+	report           *service.ReportService
+	exporter         ports.Exporter
+	trades           ports.TradeRepository
+	members          ports.MemberRepository
+	guided           *GuidedFlow
+	limiter          *RateLimiter
+	logger           *slog.Logger
+	communityGroupID int64
+	ownerID          int64
 }
 
 // NewHandler creates a Handler.
@@ -40,24 +42,53 @@ func NewHandler(
 	members ports.MemberRepository,
 	limiter *RateLimiter,
 	logger *slog.Logger,
+	communityGroupID int64,
+	ownerID int64,
 ) *Handler {
 	return &Handler{
-		sender:      sender,
-		journal:     journal,
-		leaderboard: leaderboard,
-		report:      report,
-		exporter:    exporter,
-		trades:      trades,
-		members:     members,
-		guided:      NewGuidedFlow(),
-		limiter:     limiter,
-		logger:      logger,
+		sender:           sender,
+		journal:          journal,
+		leaderboard:      leaderboard,
+		report:           report,
+		exporter:         exporter,
+		trades:           trades,
+		members:          members,
+		guided:           NewGuidedFlow(),
+		limiter:          limiter,
+		logger:           logger,
+		communityGroupID: communityGroupID,
+		ownerID:          ownerID,
 	}
 }
 
 // SetBot sets the Bot reference (needed for file downloads).
 func (h *Handler) SetBot(b *Bot) {
 	h.bot = b
+}
+
+// isAuthorized checks if the user is a member of the community group.
+// If communityGroupID is 0, everyone is authorized.
+// Returns true if authorized, false otherwise (and sends a denial message).
+func (h *Handler) isAuthorized(ctx context.Context, userID int64, chatID int64, threadID int) bool {
+	if h.communityGroupID == 0 || h.bot == nil {
+		return true // no community gate configured
+	}
+	isMember, err := h.bot.CheckChatMember(ctx, h.communityGroupID, userID)
+	if err != nil {
+		h.logger.Error("check membership failed", "error", err, "user_id", userID)
+		return true // fail open on API errors
+	}
+	if !isMember {
+		msg := "🔒 Fitur ini hanya tersedia untuk member komunitas."
+		if h.ownerID > 0 {
+			msg += fmt.Sprintf("\n\nUntuk bergabung, hubungi owner:\n➡ <a href=\"tg://user?id=%d\">Contact Owner</a>", h.ownerID)
+		} else {
+			msg += "\n\nHubungi admin komunitas untuk bergabung."
+		}
+		h.sender.SendHTML(ctx, chatID, msg, threadID)
+		return false
+	}
+	return true
 }
 
 // HandleUpdate processes a single Telegram update.
@@ -82,6 +113,11 @@ func (h *Handler) HandleUpdate(ctx context.Context, u Update) {
 			h.sender.SendText(ctx, msg.Chat.ID, "⏳ Terlalu banyak request. Coba lagi nanti.", msg.MessageThreadID)
 			return
 		}
+	}
+
+	// Community membership gate
+	if msg.From != nil && !h.isAuthorized(ctx, msg.From.ID, msg.Chat.ID, msg.MessageThreadID) {
+		return
 	}
 
 	// Check if user is in a guided session and this is a free-text input step
@@ -309,6 +345,11 @@ func (h *Handler) SendScheduledReport(ctx context.Context, chatID int64, threadI
 func (h *Handler) handleCallback(ctx context.Context, cb *CallbackQuery) {
 	h.sender.AnswerCallback(ctx, cb.ID, "")
 
+	// Community gate
+	if cb.Message != nil && !h.isAuthorized(ctx, cb.From.ID, cb.Message.Chat.ID, cb.Message.MessageThreadID) {
+		return
+	}
+
 	session := h.guided.Get(cb.From.ID)
 	if session == nil {
 		return
@@ -453,6 +494,11 @@ func (h *Handler) handleGuidedInput(ctx context.Context, msg *Message, session *
 
 // submitGuidedTrade finalises the guided flow and saves the trade.
 func (h *Handler) submitGuidedTrade(ctx context.Context, from *User, session *GuidedSession) {
+	if session.Submitting {
+		return // already processing
+	}
+	session.Submitting = true
+
 	trade := &session.Trade
 	if trade.Status == "" {
 		trade.Status = domain.StatusOpen

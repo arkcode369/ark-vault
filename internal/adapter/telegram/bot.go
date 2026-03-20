@@ -137,6 +137,43 @@ func (b *Bot) getUpdates(ctx context.Context) ([]Update, error) {
 	return result.Result, nil
 }
 
+// CheckChatMember checks if a user is a member of the given chat.
+// Returns true if the user's status is "creator", "administrator", "member", or "restricted".
+func (b *Bot) CheckChatMember(ctx context.Context, chatID int64, userID int64) (bool, error) {
+	url := fmt.Sprintf("%s%s/getChatMember?chat_id=%d&user_id=%d", telegramAPI, b.token, chatID, userID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return false, err
+	}
+	resp, err := b.client.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return false, err
+	}
+	var result struct {
+		OK     bool `json:"ok"`
+		Result struct {
+			Status string `json:"status"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return false, err
+	}
+	if !result.OK {
+		return false, nil
+	}
+	switch result.Result.Status {
+	case "creator", "administrator", "member", "restricted":
+		return true, nil
+	default:
+		return false, nil
+	}
+}
+
 // GetFileURL retrieves the direct download URL for a file.
 func (b *Bot) GetFileURL(ctx context.Context, fileID string) (string, error) {
 	url := fmt.Sprintf("%s%s/getFile?file_id=%s", telegramAPI, b.token, fileID)

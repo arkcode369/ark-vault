@@ -21,6 +21,10 @@ type Config struct {
 	ReportDay       string // Day of week: "monday", "sunday", etc. Default: "sunday"
 	ReportHour      int    // Hour (0-23) to post report. Default: 20
 
+	// Community membership gate
+	CommunityGroupID int64 // Telegram group ID to check membership against
+	OwnerID          int64 // Owner's Telegram user ID for contact link
+
 	// Rate limiting
 	RateLimitPerMin int // Max commands per user per minute. Default: 10
 }
@@ -76,6 +80,22 @@ func Load() (*Config, error) {
 		c.ReportHour = h
 	} else {
 		c.ReportHour = 20
+	}
+
+	if cgStr := os.Getenv("COMMUNITY_GROUP_ID"); cgStr != "" {
+		id, err := strconv.ParseInt(strings.TrimSpace(cgStr), 10, 64)
+		if err != nil {
+			return nil, errors.New("COMMUNITY_GROUP_ID must be a valid integer")
+		}
+		c.CommunityGroupID = id
+	}
+
+	if ownerStr := os.Getenv("OWNER_ID"); ownerStr != "" {
+		id, err := strconv.ParseInt(strings.TrimSpace(ownerStr), 10, 64)
+		if err != nil {
+			return nil, errors.New("OWNER_ID must be a valid integer")
+		}
+		c.OwnerID = id
 	}
 
 	if rlStr := os.Getenv("RATE_LIMIT_PER_MIN"); rlStr != "" {
