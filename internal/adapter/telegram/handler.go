@@ -90,6 +90,12 @@ func (h *Handler) isAuthorized(ctx context.Context, userID int64, chatID int64, 
 			}
 			h.sender.SendHTML(ctx, chatID, msg, threadID)
 		}
+		// Notify owner about unauthorized access attempt
+		if h.ownerID > 0 {
+			notif := fmt.Sprintf("⚠️ <b>Unauthorized access attempt</b>\n\nUser: <a href=\"tg://user?id=%d\">%d</a>\nChat: <code>%d</code>\nType: %s",
+				userID, userID, chatID, chatType)
+			h.sender.SendHTML(ctx, h.ownerID, notif)
+		}
 		return false
 	}
 	return true
