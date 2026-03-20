@@ -1,0 +1,39 @@
+package domain
+
+import "time"
+
+// GamificationProfile stores a member's XP and level data.
+type GamificationProfile struct {
+	TelegramID int64     `json:"telegram_id"`
+	TotalXP    int       `json:"total_xp"`
+	Level      int       `json:"level"`
+	Title      string    `json:"title"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
+// StreakData tracks consecutive days of journaling.
+type StreakData struct {
+	TelegramID    int64     `json:"telegram_id"`
+	CurrentStreak int       `json:"current_streak"`
+	LongestStreak int       `json:"longest_streak"`
+	LastLogDate   string    `json:"last_log_date"` // "2006-01-02" in WIB
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
+// XPEvent records a single XP gain event.
+type XPEvent struct {
+	TelegramID int64     `json:"telegram_id"`
+	Amount     int       `json:"amount"`
+	Reason     string    `json:"reason"`
+	Timestamp  time.Time `json:"timestamp"`
+}
+
+// OnTradeResult is returned after gamification processes a trade event.
+type OnTradeResult struct {
+	XPGained int    `json:"xp_gained"`
+	TotalXP  int    `json:"total_xp"`
+	Level    int    `json:"level"`
+	Title    string `json:"title"`
+	LeveledUp bool  `json:"leveled_up"`
+	Streak   int    `json:"streak"`
+}

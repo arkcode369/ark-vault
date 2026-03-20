@@ -14,13 +14,19 @@ import (
 	"github.com/arkcode369/ark-vault/pkg/timeutil"
 )
 
+// Services bundles all application services for the handler.
+type Services struct {
+	Journal      *service.JournalService
+	Leaderboard  *service.LeaderboardService
+	Report       *service.ReportService
+	Gamification *service.GamificationService
+}
+
 // Handler routes incoming Telegram updates to the appropriate logic.
 type Handler struct {
 	sender           *Sender
 	bot              *Bot
-	journal          *service.JournalService
-	leaderboard      *service.LeaderboardService
-	report           *service.ReportService
+	svc              Services
 	exporter         ports.Exporter
 	trades           ports.TradeRepository
 	members          ports.MemberRepository
@@ -34,9 +40,7 @@ type Handler struct {
 // NewHandler creates a Handler.
 func NewHandler(
 	sender *Sender,
-	journal *service.JournalService,
-	leaderboard *service.LeaderboardService,
-	report *service.ReportService,
+	svc Services,
 	exporter ports.Exporter,
 	trades ports.TradeRepository,
 	members ports.MemberRepository,
@@ -47,9 +51,7 @@ func NewHandler(
 ) *Handler {
 	return &Handler{
 		sender:           sender,
-		journal:          journal,
-		leaderboard:      leaderboard,
-		report:           report,
+		svc:              svc,
 		exporter:         exporter,
 		trades:           trades,
 		members:          members,
@@ -152,6 +154,8 @@ func (h *Handler) HandleUpdate(ctx context.Context, u Update) {
 		h.cmdReport(ctx, msg)
 	case strings.HasPrefix(text, "/help"), strings.HasPrefix(text, "/start"):
 		h.sender.SendHTML(ctx, msg.Chat.ID, FormatHelp(), msg.MessageThreadID)
+	case strings.HasPrefix(text, "/profile"):
+		h.cmdProfile(ctx, msg)
 	case strings.HasPrefix(text, "#journal"):
 		h.handleTextJournal(ctx, msg, text)
 	}
@@ -173,7 +177,7 @@ func (h *Handler) handleTextJournal(ctx context.Context, msg *Message, text stri
 		firstName = msg.From.FirstName
 	}
 
-	if err := h.journal.RecordTrade(ctx, msg.From.ID, username, firstName, trade); err != nil {
+	if err := h.svc.Journal.RecordTrade(ctx, msg.From.ID, username, firstName, trade); err != nil {
 		h.logger.Error("record trade failed", "error", err)
 		h.sender.SendText(ctx, msg.Chat.ID, "❌ Gagal menyimpan trade: "+err.Error(), msg.MessageThreadID)
 		return
@@ -184,6 +188,14 @@ func (h *Handler) handleTextJournal(ctx context.Context, msg *Message, text stri
 		h.uploadPhoto(ctx, msg.Photo, trade.ID)
 	}
 
+	if h.svc.Gamification != nil {
+		gamResult, _ := h.svc.Gamification.OnTradeRecorded(ctx, msg.From.ID, trade)
+		if gamResult != nil {
+			h.sender.SendHTML(ctx, msg.Chat.ID, FormatTradeConfirmationWithXP(trade, gamResult.XPGained, gamResult.TotalXP, gamResult.Level, gamResult.Title, gamResult.LeveledUp, gamResult.Streak), msg.MessageThreadID)
+			return
+		}
+	}
+	// fallback to original confirmation
 	h.sender.SendHTML(ctx, msg.Chat.ID, FormatTradeConfirmation(trade), msg.MessageThreadID)
 }
 
@@ -224,7 +236,7 @@ func (h *Handler) cmdStats(ctx context.Context, msg *Message, text string) {
 		targetUsername = member.Username
 	}
 
-	stats, err := h.journal.GetMemberStats(ctx, targetID)
+	stats, err := h.svc.Journal.GetMemberStats(ctx, targetID)
 	if err != nil {
 		h.sender.SendText(ctx, msg.Chat.ID, "📭 Belum ada trade yang tercatat.", msg.MessageThreadID)
 		return
@@ -258,7 +270,7 @@ func (h *Handler) cmdLeaderboard(ctx context.Context, msg *Message, text string)
 		metric = "rr"
 	}
 
-	entries, err := h.leaderboard.GetLeaderboard(ctx, metric, 10, 5)
+	entries, err := h.svc.Leaderboard.GetLeaderboard(ctx, metric, 10, 5)
 	if err != nil {
 		h.sender.SendText(ctx, msg.Chat.ID, "❌ Error: "+err.Error(), msg.MessageThreadID)
 		return
@@ -301,7 +313,7 @@ func (h *Handler) cmdExport(ctx context.Context, msg *Message, text string) {
 
 	switch format {
 	case "pdf":
-		stats, _ := h.journal.GetMemberStats(ctx, msg.From.ID)
+		stats, _ := h.svc.Journal.GetMemberStats(ctx, msg.From.ID)
 		data, err := h.exporter.ExportPDF(ctx, username, trades, stats)
 		if err != nil {
 			h.sender.SendText(ctx, msg.Chat.ID, "❌ Export PDF gagal: "+err.Error(), msg.MessageThreadID)
@@ -326,7 +338,7 @@ func (h *Handler) cmdReport(ctx context.Context, msg *Message) {
 	weekStart := timeutil.StartOfWeek(now, time.UTC)
 	weekEnd := weekStart.AddDate(0, 0, 7)
 
-	summary, err := h.report.GenerateWeeklySummary(ctx, weekStart, weekEnd)
+	summary, err := h.svc.Report.GenerateWeeklySummary(ctx, weekStart, weekEnd)
 	if err != nil {
 		h.sender.SendText(ctx, msg.Chat.ID, "❌ Gagal generate report: "+err.Error(), msg.MessageThreadID)
 		return
@@ -342,13 +354,27 @@ func (h *Handler) SendScheduledReport(ctx context.Context, chatID int64, threadI
 	weekStart := timeutil.StartOfWeek(now, time.UTC)
 	weekEnd := weekStart.AddDate(0, 0, 7)
 
-	summary, err := h.report.GenerateWeeklySummary(ctx, weekStart, weekEnd)
+	summary, err := h.svc.Report.GenerateWeeklySummary(ctx, weekStart, weekEnd)
 	if err != nil {
 		return err
 	}
 
 	_, err = h.sender.SendHTMLToThread(ctx, chatID, threadID, FormatWeeklySummary(summary))
 	return err
+}
+
+// cmdProfile shows the user's gamification profile.
+func (h *Handler) cmdProfile(ctx context.Context, msg *Message) {
+	if msg.From == nil || h.svc.Gamification == nil {
+		return
+	}
+	profile, err := h.svc.Gamification.GetProfile(ctx, msg.From.ID)
+	if err != nil {
+		h.sender.SendText(ctx, msg.Chat.ID, "❌ Gagal memuat profil.", msg.MessageThreadID)
+		return
+	}
+	streak, _ := h.svc.Gamification.GetStreak(ctx, msg.From.ID)
+	h.sender.SendHTML(ctx, msg.Chat.ID, FormatProfile(profile, streak), msg.MessageThreadID)
 }
 
 // handleCallback processes inline button presses.
@@ -514,7 +540,7 @@ func (h *Handler) submitGuidedTrade(ctx context.Context, from *User, session *Gu
 		trade.Status = domain.StatusOpen
 	}
 
-	err := h.journal.RecordTrade(ctx, from.ID, from.Username, from.FirstName, trade)
+	err := h.svc.Journal.RecordTrade(ctx, from.ID, from.Username, from.FirstName, trade)
 	if err != nil {
 		h.logger.Error("guided submit failed", "error", err)
 		h.sender.SendText(ctx, session.ChatID, "❌ Gagal menyimpan: "+err.Error(), session.ThreadID)
@@ -525,6 +551,19 @@ func (h *Handler) submitGuidedTrade(ctx context.Context, from *User, session *Gu
 	// Upload screenshot if provided
 	if session.PhotoFileID != "" && trade.ID != "" && h.bot != nil {
 		h.uploadPhoto(ctx, []PhotoSize{{FileID: session.PhotoFileID}}, trade.ID)
+	}
+
+	// After successful trade recording, trigger gamification
+	if h.svc.Gamification != nil {
+		gamResult, err := h.svc.Gamification.OnTradeRecorded(ctx, from.ID, trade)
+		if err != nil {
+			h.logger.Error("gamification failed", "error", err)
+		} else {
+			// Send enhanced confirmation with XP info
+			h.sender.SendHTML(ctx, session.ChatID, FormatTradeConfirmationWithXP(trade, gamResult.XPGained, gamResult.TotalXP, gamResult.Level, gamResult.Title, gamResult.LeveledUp, gamResult.Streak), session.ThreadID)
+			h.guided.Remove(from.ID)
+			return
+		}
 	}
 
 	h.sender.SendHTML(ctx, session.ChatID, FormatTradeConfirmation(trade), session.ThreadID)
@@ -544,7 +583,7 @@ func (h *Handler) uploadPhoto(ctx context.Context, photos []PhotoSize, tradeID s
 		return
 	}
 	// Pass the URL as the "filename" — the Notion image store uses external URLs
-	if err := h.journal.UploadScreenshot(ctx, tradeID, fileURL, nil); err != nil {
+	if err := h.svc.Journal.UploadScreenshot(ctx, tradeID, fileURL, nil); err != nil {
 		h.logger.Error("upload screenshot", "error", err)
 	}
 }

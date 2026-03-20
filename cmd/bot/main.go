@@ -11,6 +11,7 @@ import (
 	"github.com/arkcode369/ark-vault/internal/adapter/exporter"
 	"github.com/arkcode369/ark-vault/internal/adapter/notion"
 	"github.com/arkcode369/ark-vault/internal/adapter/telegram"
+	badgerdb "github.com/arkcode369/ark-vault/internal/adapter/badger"
 	"github.com/arkcode369/ark-vault/internal/config"
 	"github.com/arkcode369/ark-vault/internal/scheduler"
 	"github.com/arkcode369/ark-vault/internal/service"
@@ -36,10 +37,20 @@ func main() {
 	tradeRepo := notion.NewTradeRepo(notionClient, memberRepo)
 	imageRepo := notion.NewImageRepo(notionClient)
 
+	// BadgerDB for gamification
+	store, err := badgerdb.OpenStore(cfg.BadgerDBPath)
+	if err != nil {
+		logger.Error("failed to open badger store", "error", err)
+		os.Exit(1)
+	}
+	defer store.Close()
+
 	// Services
 	journalSvc := service.NewJournalService(tradeRepo, memberRepo, imageRepo)
 	leaderboardSvc := service.NewLeaderboardService(tradeRepo, memberRepo)
 	reportSvc := service.NewReportService(tradeRepo, memberRepo)
+	gamRepo := badgerdb.NewGamificationRepo(store)
+	gamSvc := service.NewGamificationService(gamRepo, tradeRepo, memberRepo)
 
 	// Exporter (CSV + PDF)
 	exp := exporter.NewExporter()
@@ -49,9 +60,14 @@ func main() {
 
 	// Telegram
 	sender := telegram.NewSender(cfg.TelegramToken)
+	svc := telegram.Services{
+		Journal:      journalSvc,
+		Leaderboard:  leaderboardSvc,
+		Report:       reportSvc,
+		Gamification: gamSvc,
+	}
 	handler := telegram.NewHandler(
-		sender, journalSvc, leaderboardSvc, reportSvc,
-		exp, tradeRepo, memberRepo, limiter, logger,
+		sender, svc, exp, tradeRepo, memberRepo, limiter, logger,
 		cfg.CommunityGroupID, cfg.OwnerID,
 	)
 	bot := telegram.NewBot(cfg.TelegramToken, handler, logger)

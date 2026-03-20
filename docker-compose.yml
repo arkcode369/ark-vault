@@ -1,3 +1,6 @@
+volumes:
+  vault-data:
+
 services:
   bot:
     build:
@@ -14,6 +17,8 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    volumes:
+      - vault-data:/data/badger
     deploy:
       resources:
         limits:

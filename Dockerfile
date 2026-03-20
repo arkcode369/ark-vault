@@ -24,6 +24,8 @@ RUN apk --no-cache add ca-certificates tzdata \
 
 COPY --from=builder /ark-vault /usr/local/bin/ark-vault
 
+RUN mkdir -p /data/badger && chown appuser:appuser /data/badger
+
 USER appuser
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \

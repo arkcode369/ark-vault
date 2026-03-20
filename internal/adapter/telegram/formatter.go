@@ -128,6 +128,7 @@ Confluence: FVG + OB mitigation on 15m</pre>
 • /report — Summary report minggu ini
 
 <b>Lainnya:</b>
+• /profile — Profil & level gamifikasi
 • /help — Tampilkan pesan ini
 
 <b>Tips:</b>
@@ -172,6 +173,88 @@ func FormatWeeklySummary(s *service.WeeklySummary) string {
 	if s.TotalTrades == 0 {
 		sb.WriteString("\n📭 Belum ada trade minggu ini.")
 	}
+
+	return sb.String()
+}
+
+// FormatTradeConfirmationWithXP formats a saved trade confirmation with gamification XP info.
+func FormatTradeConfirmationWithXP(t *domain.Trade, xpGained int, totalXP int, level int, title string, leveledUp bool, streak int) string {
+	base := FormatTradeConfirmation(t)
+	var sb strings.Builder
+	sb.WriteString(base)
+	sb.WriteString(fmt.Sprintf("\n⚡ +%d XP (total: %d)\n", xpGained, totalXP))
+	sb.WriteString(fmt.Sprintf("📊 Level %d — %s\n", level, title))
+	if streak > 0 {
+		sb.WriteString(fmt.Sprintf("🔥 Streak: %d hari\n", streak))
+	}
+	if leveledUp {
+		sb.WriteString(fmt.Sprintf("\n🎉 <b>LEVEL UP!</b> Level %d — %s\n", level, title))
+	}
+	return sb.String()
+}
+
+// FormatProfile formats a user's gamification profile as HTML.
+func FormatProfile(profile *domain.GamificationProfile, streak *domain.StreakData) string {
+	var sb strings.Builder
+	sb.WriteString("🏆 <b>Profil Trader</b>\n\n")
+
+	lvl := 1
+	title := "Pemula"
+	totalXP := 0
+	if profile != nil {
+		lvl = profile.Level
+		title = profile.Title
+		totalXP = profile.TotalXP
+		if lvl == 0 {
+			lvl = 1
+			title = "Pemula"
+		}
+	}
+
+	nextXP := domain.XPForNextLevel(totalXP)
+	nextTitle := ""
+	if nextXP > 0 {
+		_, nextTitle = domain.LevelForXP(nextXP)
+		sb.WriteString(fmt.Sprintf("Level: <b>%d</b> — %s\n", lvl, title))
+		sb.WriteString(fmt.Sprintf("XP: <b>%d</b> / %d (next: %s)\n", totalXP, nextXP, nextTitle))
+
+		// Progress bar
+		var prevXP int
+		for _, lt := range domain.LevelTable {
+			if lt.Level == lvl {
+				prevXP = lt.XP
+				break
+			}
+		}
+		progress := 0
+		span := nextXP - prevXP
+		if span > 0 {
+			progress = (totalXP - prevXP) * 100 / span
+		}
+		filled := progress * 16 / 100
+		if filled < 0 {
+			filled = 0
+		}
+		if filled > 16 {
+			filled = 16
+		}
+		bar := strings.Repeat("█", filled) + strings.Repeat("░", 16-filled)
+		sb.WriteString(fmt.Sprintf("[%s] %d%%\n", bar, progress))
+	} else {
+		sb.WriteString(fmt.Sprintf("Level: <b>%d</b> — %s\n", lvl, title))
+		sb.WriteString(fmt.Sprintf("XP: <b>%d</b> (MAX LEVEL)\n", totalXP))
+		sb.WriteString("[████████████████] 100%\n")
+	}
+
+	curStreak := 0
+	longestStreak := 0
+	if streak != nil {
+		curStreak = streak.CurrentStreak
+		longestStreak = streak.LongestStreak
+	}
+
+	sb.WriteString(fmt.Sprintf("\n🔥 Streak: <b>%d</b> hari berturut-turut\n", curStreak))
+	sb.WriteString(fmt.Sprintf("📊 Streak terpanjang: <b>%d</b> hari\n", longestStreak))
 
 	return sb.String()
 }

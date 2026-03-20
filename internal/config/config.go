@@ -25,6 +25,9 @@ type Config struct {
 	CommunityGroupID int64 // Telegram group ID to check membership against
 	OwnerID          int64 // Owner's Telegram user ID for contact link
 
+	// BadgerDB (Gamification Storage)
+	BadgerDBPath string
+
 	// Rate limiting
 	RateLimitPerMin int // Max commands per user per minute. Default: 10
 }
@@ -96,6 +99,11 @@ func Load() (*Config, error) {
 			return nil, errors.New("OWNER_ID must be a valid integer")
 		}
 		c.OwnerID = id
+	}
+
+	c.BadgerDBPath = strings.TrimSpace(os.Getenv("BADGER_DB_PATH"))
+	if c.BadgerDBPath == "" {
+		c.BadgerDBPath = "/data/badger"
 	}
 
 	if rlStr := os.Getenv("RATE_LIMIT_PER_MIN"); rlStr != "" {
