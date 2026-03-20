@@ -10,11 +10,13 @@ import (
 	"time"
 
 	"github.com/arkcode369/ark-vault/internal/adapter/exporter"
+	"github.com/arkcode369/ark-vault/internal/adapter/gemini"
 	"github.com/arkcode369/ark-vault/internal/adapter/notion"
 	"github.com/arkcode369/ark-vault/internal/adapter/telegram"
 	badgerdb "github.com/arkcode369/ark-vault/internal/adapter/badger"
 	"github.com/arkcode369/ark-vault/internal/config"
 	"github.com/arkcode369/ark-vault/internal/domain"
+	"github.com/arkcode369/ark-vault/internal/ports"
 	"github.com/arkcode369/ark-vault/internal/scheduler"
 	"github.com/arkcode369/ark-vault/internal/service"
 )
@@ -66,6 +68,23 @@ func main() {
 	reminderSvc := service.NewReminderService(reminderRepo, gamRepo, logger)
 	goalSvc := service.NewGoalService(goalRepo, tradeRepo, gamSvc, badgeSvc)
 
+	// Gemini AI (optional)
+	var aiAnalyzer ports.AIAnalyzer
+	if cfg.GeminiAPIKey != "" {
+		aiAnalyzer = gemini.NewAnalyzer(cfg.GeminiAPIKey, cfg.GeminiModel)
+		logger.Info("gemini AI analyzer enabled", "model", cfg.GeminiModel)
+	}
+
+	// Analytics & Report Card services
+	analyticsCacheRepo := badgerdb.NewAnalyticsCacheRepo(store)
+	reportCardRepo := badgerdb.NewReportCardRepo(store)
+	var analyticsSvc *service.AnalyticsService
+	var reportCardSvc *service.ReportCardService
+	if aiAnalyzer != nil {
+		analyticsSvc = service.NewAnalyticsService(analyticsCacheRepo, aiAnalyzer, tradeRepo)
+		reportCardSvc = service.NewReportCardService(reportCardRepo, tradeRepo, gamRepo, badgeRepo, aiAnalyzer)
+	}
+
 	// Exporter (CSV + PDF)
 	exp := exporter.NewExporter()
 
@@ -83,6 +102,8 @@ func main() {
 		Challenge:    challengeSvc,
 		Reminder:     reminderSvc,
 		Goal:         goalSvc,
+		Analytics:    analyticsSvc,
+		ReportCard:   reportCardSvc,
 	}
 	handler := telegram.NewHandler(
 		sender, svc, exp, tradeRepo, memberRepo, limiter, logger,
@@ -189,6 +210,39 @@ func main() {
 				}
 				text := telegram.FormatDailyReminder(streakDays)
 				sender.SendHTML(ctx, pref.ChatID, text, pref.ThreadID)
+			}
+			return nil
+		},
+	})
+
+	sched.Add(scheduler.Job{
+		Name:     "monthly-report-card",
+		Interval: 1 * time.Hour,
+		Run: func(ctx context.Context) error {
+			now := time.Now().UTC()
+			// Generate on 1st of month at report hour
+			if now.Day() == 1 && now.Hour() == cfg.ReportHour {
+				lastMonth := now.AddDate(0, -1, 0).Format("2006-01")
+				members, err := memberRepo.ListMembers(ctx)
+				if err != nil {
+					return err
+				}
+				for _, m := range members {
+					if reportCardSvc != nil {
+						report, err := reportCardSvc.GenerateMonthlyReport(ctx, m.TelegramID, lastMonth)
+						if err != nil {
+							logger.Error("report card generation failed", "member", m.TelegramID, "error", err)
+							continue
+						}
+						if report.TotalTrades > 0 {
+							text := telegram.FormatMonthlyReportCard(report)
+							// Send to report chat if configured
+							if cfg.ReportChatID != 0 {
+								sender.SendHTML(ctx, cfg.ReportChatID, text, cfg.ReportThreadID)
+							}
+						}
+					}
+				}
 			}
 			return nil
 		},

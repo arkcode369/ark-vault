@@ -28,6 +28,10 @@ type Config struct {
 	// BadgerDB (Gamification Storage)
 	BadgerDBPath string
 
+	// Gemini AI
+	GeminiAPIKey string
+	GeminiModel  string // default "gemini-2.0-flash"
+
 	// Rate limiting
 	RateLimitPerMin int // Max commands per user per minute. Default: 10
 }
@@ -104,6 +108,12 @@ func Load() (*Config, error) {
 	c.BadgerDBPath = strings.TrimSpace(os.Getenv("BADGER_DB_PATH"))
 	if c.BadgerDBPath == "" {
 		c.BadgerDBPath = "/data/badger"
+	}
+
+	c.GeminiAPIKey = strings.TrimSpace(os.Getenv("GEMINI_API_KEY"))
+	c.GeminiModel = strings.TrimSpace(os.Getenv("GEMINI_MODEL"))
+	if c.GeminiModel == "" {
+		c.GeminiModel = "gemini-2.0-flash"
 	}
 
 	if rlStr := os.Getenv("RATE_LIMIT_PER_MIN"); rlStr != "" {

@@ -134,6 +134,8 @@ Confluence: FVG + OB mitigation on 15m</pre>
 • /challenge — Weekly challenge & standings
 • /reminder — Atur daily reminder
 • /goal — Monthly goal & progress
+• /analyze — AI trade analytics
+• /reportcard — Monthly report card
 • /help — Tampilkan pesan ini
 
 <b>Tips:</b>
@@ -477,7 +479,74 @@ func FormatGoalProgress(p *domain.GoalProgress) string {
 	sb.WriteString(fmt.Sprintf("[%s] %.0f%%\n", bar, p.Percentage))
 
 	if g.Achieved {
-		sb.WriteString("\n✅ <b>Goal tercapai!</b> 🎉")
+		sb.WriteString("\n\u2705 <b>Goal tercapai!</b> \U0001f389")
+	}
+
+	return sb.String()
+}
+
+// FormatAnalytics formats AI trade analytics.
+func FormatAnalytics(a *domain.TradeAnalytics) string {
+	var sb strings.Builder
+	sb.WriteString("\U0001f916 <b>AI Trade Analytics</b>\n\n")
+
+	sb.WriteString(fmt.Sprintf("\U0001f4ca Berdasarkan <b>%d trades</b> (WR: %.1f%%, RR: %+.1f)\n\n", a.TotalTrades, a.WinRate, a.TotalRR))
+
+	if a.StrengthAnalysis != "" {
+		sb.WriteString(fmt.Sprintf("\U0001f4aa <b>Kekuatan:</b>\n%s\n\n", a.StrengthAnalysis))
+	}
+	if a.WeaknessAnalysis != "" {
+		sb.WriteString(fmt.Sprintf("\u26a0\ufe0f <b>Kelemahan:</b>\n%s\n\n", a.WeaknessAnalysis))
+	}
+	if a.PatternInsights != "" {
+		sb.WriteString(fmt.Sprintf("\U0001f50d <b>Pola Trading:</b>\n%s\n\n", a.PatternInsights))
+	}
+	if a.Recommendations != "" {
+		sb.WriteString(fmt.Sprintf("\U0001f4a1 <b>Rekomendasi:</b>\n%s\n\n", a.Recommendations))
+	}
+	if a.OverallAssessment != "" {
+		sb.WriteString(fmt.Sprintf("\U0001f4dd <b>Penilaian:</b>\n%s\n", a.OverallAssessment))
+	}
+
+	sb.WriteString(fmt.Sprintf("\n<i>Generated: %s (cache 24h)</i>", a.GeneratedAt.Format("02 Jan 15:04")))
+	return sb.String()
+}
+
+// FormatMonthlyReportCard formats a monthly performance report card.
+func FormatMonthlyReportCard(r *domain.MonthlyReportCard) string {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("\U0001f4cb <b>Monthly Report Card \u2014 %s</b>\n\n", r.YearMonth))
+
+	sb.WriteString("<b>\U0001f4ca Statistik:</b>\n")
+	sb.WriteString(fmt.Sprintf("Total trades: <b>%d</b>\n", r.TotalTrades))
+	sb.WriteString(fmt.Sprintf("Win/Loss/BE: <b>%d</b>/%d/%d\n", r.Wins, r.Losses, r.BreakEvens))
+	sb.WriteString(fmt.Sprintf("Win Rate: <b>%.1f%%</b>\n", r.WinRate))
+	sb.WriteString(fmt.Sprintf("Total RR: <b>%+.1fR</b>\n", r.TotalRR))
+	sb.WriteString(fmt.Sprintf("Best: <b>%+.1fR</b> | Worst: <b>%+.1fR</b>\n\n", r.BestTrade, r.WorstTrade))
+
+	sb.WriteString("<b>\U0001f3c6 Gamifikasi:</b>\n")
+	sb.WriteString(fmt.Sprintf("Level: <b>%d</b> \u2014 %s\n", r.Level, r.Title))
+	sb.WriteString(fmt.Sprintf("XP earned: <b>+%d</b>\n", r.XPEarned))
+	if r.BadgesEarned > 0 {
+		sb.WriteString(fmt.Sprintf("Badges earned: <b>%d</b>\n", r.BadgesEarned))
+	}
+	if r.LongestStreak > 0 {
+		sb.WriteString(fmt.Sprintf("Longest streak: <b>%d hari</b>\n", r.LongestStreak))
+	}
+
+	if len(r.AssetBreakdown) > 0 {
+		sb.WriteString("\n<b>Per Asset:</b>\n")
+		for asset, stats := range r.AssetBreakdown {
+			sb.WriteString(fmt.Sprintf("  %s: %d trades, %.1f%% WR, %+.1fR\n", asset, stats.Total, stats.WinRate, stats.TotalRR))
+		}
+	}
+
+	if r.AISummary != "" {
+		sb.WriteString(fmt.Sprintf("\n\U0001f916 <b>AI Summary:</b>\n%s\n", r.AISummary))
+	}
+
+	if r.TotalTrades == 0 {
+		sb.WriteString("\n\U0001f4ed Tidak ada trade bulan ini.")
 	}
 
 	return sb.String()

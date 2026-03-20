@@ -46,3 +46,15 @@ type GoalStore interface {
 	SaveGoal(ctx context.Context, goal *domain.MonthlyGoal) error
 	ListActiveGoals(ctx context.Context, yearMonth string) ([]domain.MonthlyGoal, error)
 }
+
+// AnalyticsCacheStore caches AI analytics results.
+type AnalyticsCacheStore interface {
+	GetAnalyticsCache(ctx context.Context, telegramID int64) (*domain.TradeAnalytics, error)
+	SaveAnalyticsCache(ctx context.Context, analytics *domain.TradeAnalytics) error
+}
+
+// ReportCardStore stores monthly report cards.
+type ReportCardStore interface {
+	GetReportCard(ctx context.Context, telegramID int64, yearMonth string) (*domain.MonthlyReportCard, error)
+	SaveReportCard(ctx context.Context, report *domain.MonthlyReportCard) error
+}

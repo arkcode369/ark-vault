@@ -24,6 +24,8 @@ type Services struct {
 	Challenge    *service.ChallengeService
 	Reminder     *service.ReminderService
 	Goal         *service.GoalService
+	Analytics    *service.AnalyticsService
+	ReportCard   *service.ReportCardService
 }
 
 // Handler routes incoming Telegram updates to the appropriate logic.
@@ -168,6 +170,10 @@ func (h *Handler) HandleUpdate(ctx context.Context, u Update) {
 		h.cmdReminder(ctx, msg, text)
 	case strings.HasPrefix(text, "/goal"):
 		h.cmdGoal(ctx, msg, text)
+	case strings.HasPrefix(text, "/analyze"):
+		h.cmdAnalyze(ctx, msg)
+	case strings.HasPrefix(text, "/reportcard"):
+		h.cmdReportCard(ctx, msg)
 	case strings.HasPrefix(text, "#journal"):
 		h.handleTextJournal(ctx, msg, text)
 	}
@@ -769,4 +775,63 @@ func (h *Handler) cmdGoal(ctx context.Context, msg *Message, text string) {
 		return
 	}
 	h.sender.SendHTML(ctx, msg.Chat.ID, FormatGoalProgress(progress), msg.MessageThreadID)
+}
+
+// cmdAnalyze shows AI-powered trade analytics.
+func (h *Handler) cmdAnalyze(ctx context.Context, msg *Message) {
+	if msg.From == nil || h.svc.Analytics == nil {
+		h.sender.SendText(ctx, msg.Chat.ID, "\u26a0\ufe0f Fitur analytics belum tersedia.", msg.MessageThreadID)
+		return
+	}
+	// Send "analyzing" message first since AI call can take a few seconds
+	waitMsgID, _ := h.sender.SendText(ctx, msg.Chat.ID, "\U0001f916 Menganalisis trading kamu...", msg.MessageThreadID)
+
+	analytics, err := h.svc.Analytics.GetAnalytics(ctx, msg.From.ID)
+	if err != nil {
+		h.logger.Error("analytics failed", "error", err)
+		if waitMsgID > 0 {
+			h.sender.EditMessage(ctx, msg.Chat.ID, waitMsgID, "\u274c Gagal menganalisis: "+err.Error())
+		}
+		return
+	}
+
+	// Delete waiting message and send result
+	if waitMsgID > 0 {
+		h.sender.DeleteMessage(ctx, msg.Chat.ID, waitMsgID)
+	}
+	h.sender.SendHTML(ctx, msg.Chat.ID, FormatAnalytics(analytics), msg.MessageThreadID)
+}
+
+// cmdReportCard shows monthly report card.
+func (h *Handler) cmdReportCard(ctx context.Context, msg *Message) {
+	if msg.From == nil || h.svc.ReportCard == nil {
+		h.sender.SendText(ctx, msg.Chat.ID, "\u26a0\ufe0f Fitur report card belum tersedia.", msg.MessageThreadID)
+		return
+	}
+
+	// Use previous month by default, or current if specified
+	now := time.Now()
+	yearMonth := now.AddDate(0, -1, 0).Format("2006-01") // last month
+
+	// Check if user wants current month: /reportcard current
+	parts := strings.Fields(msg.Text)
+	if len(parts) >= 2 && parts[1] == "current" {
+		yearMonth = now.Format("2006-01")
+	}
+
+	waitMsgID, _ := h.sender.SendText(ctx, msg.Chat.ID, "\U0001f4ca Generating report card...", msg.MessageThreadID)
+
+	report, err := h.svc.ReportCard.GenerateMonthlyReport(ctx, msg.From.ID, yearMonth)
+	if err != nil {
+		h.logger.Error("report card failed", "error", err)
+		if waitMsgID > 0 {
+			h.sender.EditMessage(ctx, msg.Chat.ID, waitMsgID, "\u274c Gagal generate report: "+err.Error())
+		}
+		return
+	}
+
+	if waitMsgID > 0 {
+		h.sender.DeleteMessage(ctx, msg.Chat.ID, waitMsgID)
+	}
+	h.sender.SendHTML(ctx, msg.Chat.ID, FormatMonthlyReportCard(report), msg.MessageThreadID)
 }
