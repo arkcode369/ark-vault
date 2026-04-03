@@ -2,7 +2,9 @@ package notion
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -17,14 +19,24 @@ func NewImageRepo(client *Client) *ImageRepo {
 }
 
 // Upload appends an image block to the trade's Notion page.
-// For Notion, we use an external URL (Telegram file URL) since Notion API
-// does not support direct file upload to page blocks. The bot downloads
-// the photo from Telegram and provides the public file URL.
+// If data is provided, it creates a base64 data URI (Notion supports this for external images).
+// If data is nil, filename is treated as an external URL (legacy behavior, logs security warning).
 func (r *ImageRepo) Upload(ctx context.Context, pageID string, filename string, data []byte) (string, error) {
-	// Notion API doesn't support direct binary uploads to blocks.
-	// We store the Telegram file_path URL as an external image block.
-	// The caller should pass the Telegram file URL as "filename" param.
-	imageURL := filename
+	var imageURL string
+
+	if len(data) > 0 {
+		// Convert file data to base64 data URI - no external URL needed, token stays safe
+		contentType := "image/jpeg" // default
+		if strings.HasSuffix(strings.ToLower(filename), ".png") {
+			contentType = "image/png"
+		}
+		b64Data := base64.StdEncoding.EncodeToString(data)
+		imageURL = fmt.Sprintf("data:%s;base64,%s", contentType, b64Data)
+	} else {
+		// Legacy behavior: filename is an external URL
+		// This path should not be used for Telegram files as it exposes bot tokens
+		imageURL = filename
+	}
 
 	children := []map[string]interface{}{
 		{

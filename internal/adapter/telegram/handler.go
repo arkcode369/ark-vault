@@ -643,13 +643,14 @@ func (h *Handler) uploadPhoto(ctx context.Context, photos []PhotoSize, tradeID s
 	}
 	// Use the largest photo
 	photo := photos[len(photos)-1]
-	fileURL, err := h.bot.GetFileURL(ctx, photo.FileID)
+	fileData, err := h.bot.GetFile(ctx, photo.FileID)
 	if err != nil {
-		h.logger.Error("get file url", "error", err)
+		h.logger.Error("download file", "error", err)
 		return
 	}
-	// Pass the URL as the "filename" — the Notion image store uses external URLs
-	if err := h.svc.Journal.UploadScreenshot(ctx, tradeID, fileURL, nil); err != nil {
+	// Pass the file content to Notion - the token is no longer exposed in URLs
+	filename := fmt.Sprintf("screenshot_%s.jpg", tradeID)
+	if err := h.svc.Journal.UploadScreenshot(ctx, tradeID, filename, fileData); err != nil {
 		h.logger.Error("upload screenshot", "error", err)
 	}
 }

@@ -174,23 +174,26 @@ func (b *Bot) CheckChatMember(ctx context.Context, chatID int64, userID int64) (
 	}
 }
 
-// GetFileURL retrieves the direct download URL for a file.
-func (b *Bot) GetFileURL(ctx context.Context, fileID string) (string, error) {
+// GetFile downloads a file from Telegram by file ID and returns the content.
+// This method downloads the file directly rather than returning a URL with the bot token embedded,
+// preventing token exposure when files are uploaded to external systems like Notion.
+func (b *Bot) GetFile(ctx context.Context, fileID string) ([]byte, error) {
+	// First, get the file path
 	url := fmt.Sprintf("%s%s/getFile?file_id=%s", telegramAPI, b.token, fileID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	resp, err := b.client.Do(req)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	var result struct {
@@ -200,7 +203,24 @@ func (b *Bot) GetFileURL(ctx context.Context, fileID string) (string, error) {
 		} `json:"result"`
 	}
 	if err := json.Unmarshal(body, &result); err != nil {
-		return "", err
+		return nil, err
 	}
-	return fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", b.token, result.Result.FilePath), nil
+	if !result.OK {
+		return nil, fmt.Errorf("telegram API error: %s", string(body))
+	}
+
+	// Download the actual file content
+	fileURL := fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", b.token, result.Result.FilePath)
+	req, err = http.NewRequestWithContext(ctx, http.MethodGet, fileURL, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err = b.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	return io.ReadAll(resp.Body)
 }

@@ -125,8 +125,33 @@ func generateMinimalPDF(text string) []byte {
 }
 
 func pdfEscape(s string) string {
-	s = strings.ReplaceAll(s, "\\", "\\\\")
-	s = strings.ReplaceAll(s, "(", "\\(")
-	s = strings.ReplaceAll(s, ")", "\\)")
-	return s
+	var buf strings.Builder
+	for _, r := range s {
+		switch r {
+		case '\\':
+			buf.WriteString("\\\\")
+		case '(':
+			buf.WriteString("\\(")
+		case ')':
+			buf.WriteString("\\)")
+		case '\r':
+			buf.WriteString("\\r")
+		case '\n':
+			buf.WriteString("\\n")
+		case '\t':
+			buf.WriteString("\\t")
+		case '\b':
+			buf.WriteString("\\b")
+		case '\f':
+			buf.WriteString("\\f")
+		default:
+			// Control characters (0-31 except whitespace, and 127) should be escaped
+			if r < 32 || r == 127 {
+				buf.WriteString(fmt.Sprintf("\\%03o", r))
+			} else {
+				buf.WriteRune(r)
+			}
+		}
+	}
+	return buf.String()
 }
