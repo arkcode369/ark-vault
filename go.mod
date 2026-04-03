@@ -1,6 +1,6 @@
 module github.com/arkcode369/ark-vault
 
-go 1.24.4
+go 1.22
 
 require github.com/dgraph-io/badger/v4 v4.9.1
 
